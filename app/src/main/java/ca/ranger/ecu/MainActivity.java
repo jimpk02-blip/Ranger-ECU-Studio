@@ -17,7 +17,7 @@ public class MainActivity extends Activity {
  button("Déconnecter",()->{live=false;pcmReady=false;try{if(socket!=null)socket.close();}catch(Exception e){}setStatus("Déconnecté");});
  button("Partager le rapport",()->{android.content.Intent i=new android.content.Intent(android.content.Intent.ACTION_SEND);i.setType("text/plain");i.putExtra(android.content.Intent.EXTRA_TEXT,log.getText().toString());startActivity(android.content.Intent.createChooser(i,"Exporter"));});
  button("Mesures en direct",()->toggleLive());button("Vider le journal",()->log.setText(""));button("Maintenance PCM",()->maintenanceMenu());button("Comparer avant / après",()->compareKam());status=new TextView(this);status.setText("Déconnecté");status.setTextSize(12);status.setTextColor(BLUE);status.setPadding(dp(8),dp(7),dp(8),dp(7));status.setBackground(panel(0xff102437,0xff315b7e));root.addView(status,new LinearLayout.LayoutParams(-1,-2));
- TextView heading=new TextView(this);heading.setText("Journal de connexion et diagnostic");heading.setTextSize(14);heading.setTextColor(BLUE);heading.setPadding(dp(6),dp(10),dp(6),dp(5));root.addView(heading,new LinearLayout.LayoutParams(-1,-2));journal=new ScrollView(this);journal.setFillViewport(true);journal.setBackground(panel(0xff0e1b28,0xff263e54));log=new TextView(this);log.setTextColor(0xffeeeeee);log.setTextSize(12);log.setTypeface(android.graphics.Typeface.MONOSPACE);log.setPadding(dp(8),dp(8),dp(8),dp(8));log.setTextIsSelectable(true);journal.addView(log,new ScrollView.LayoutParams(-1,-2));root.addView(journal,new LinearLayout.LayoutParams(-1,0,1));TextView footer=new TextView(this);String version="1.2.0";try{version=getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception ignored){}footer.setText("Ranger ECU Studio — v"+version);footer.setGravity(android.view.Gravity.CENTER);footer.setPadding(0,dp(8),0,dp(8));footer.setTextSize(12);footer.setTextColor(0xff91a9be);root.addView(footer,new LinearLayout.LayoutParams(-1,-2));show("Connexion directe Ranger CAN 11/500. Jumeler le Viecar dans Android au besoin. Maintenance : effacement DTC après réparation uniquement. Reset KAM et programmation verrouillés.");}
+ TextView heading=new TextView(this);heading.setText("Journal de connexion et diagnostic");heading.setTextSize(14);heading.setTextColor(BLUE);heading.setPadding(dp(6),dp(10),dp(6),dp(5));root.addView(heading,new LinearLayout.LayoutParams(-1,-2));journal=new ScrollView(this);journal.setFillViewport(true);journal.setBackground(panel(0xff0e1b28,0xff263e54));log=new TextView(this);log.setTextColor(0xffeeeeee);log.setTextSize(12);log.setTypeface(android.graphics.Typeface.MONOSPACE);log.setPadding(dp(8),dp(8),dp(8),dp(8));log.setTextIsSelectable(true);journal.addView(log,new ScrollView.LayoutParams(-1,-2));root.addView(journal,new LinearLayout.LayoutParams(-1,0,1));TextView footer=new TextView(this);String version="1.2.1";try{version=getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception ignored){}footer.setText("Ranger ECU Studio — v"+version);footer.setGravity(android.view.Gravity.CENTER);footer.setPadding(0,dp(8),0,dp(8));footer.setTextSize(12);footer.setTextColor(0xff91a9be);root.addView(footer,new LinearLayout.LayoutParams(-1,-2));show("Connexion directe Ranger CAN 11/500. Jumeler le Viecar dans Android au besoin. Maintenance : effacement DTC après réparation uniquement. Reset KAM et programmation verrouillés.");}
  public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] results){super.onRequestPermissionsResult(requestCode,permissions,results);if(requestCode==1 && results.length>0 && results[0]==0)chooseDevice(advancedPermission);else if(requestCode==1)show("Autorisation Bluetooth refusée.");}
  void choose(){chooseDevice(false);}
  void advancedMenu(){
@@ -63,13 +63,15 @@ public class MainActivity extends Activity {
    "Identification et sauvegarde OBD-II",
    "Afficher la dernière sauvegarde",
    "Configuration Ford As-Built — non disponible",
-   "Reprogrammation PCM — verrouillée"
+   "Reprogrammation PCM — verrouillée",
+   "Autotest local — sans véhicule"
   },(d,n)->{
    if(n==0)confirmClear();
    else if(n==1)kamMenu();
    else if(n==2)new AlertDialog.Builder(this).setTitle("Reset KAM Ford").setMessage("La commande spécifique à la calibration n'est pas validée. L'effacement OBD-II ne constitue pas un Reset KAM garanti. Utiliser un outil Ford compatible; l'assistant permet de comparer les mesures.").setPositiveButton("OK",null).show();
    else if(n==3)submit(()->{try{saveMaintenance("identification",new String[]{"ATI","ATRV","ATDP","ATDPN","0900","0902","0904","0906","0100","0120","0140","0101","03","07","020200","020400","020500","020C00","020D00"});show("Sauvegarde OBD-II terminée. Ce n'est pas une sauvegarde de la cartographie ni de l'As-Built.");}catch(Exception e){show("Sauvegarde incomplète : "+e);}});
    else if(n==4)show(getSharedPreferences("maintenance",MODE_PRIVATE).getString("latest","Aucune sauvegarde enregistrée."));
+   else if(n==7)parserSelfTest();
    else new AlertDialog.Builder(this).setTitle("Fonction non disponible").setMessage("Accès aux modules Ford et compatibilité matérielle à vérifier. Aucune commande de programmation n'est envoyée.").setPositiveButton("OK",null).show();
   }).setNegativeButton("Fermer",null).show();
  }
@@ -120,24 +122,77 @@ public class MainActivity extends Activity {
    captureKam(n==0?"avant":n==2?"apres":"retour");
   }).setNegativeButton("Fermer",null).show();
  }
+ int[] pidBytes(String raw,String prefix,int n){
+  if(raw==null)return null;
+  String h=raw.trim().replaceAll("\\s+","").toUpperCase(Locale.ROOT);
+  if(!h.startsWith(prefix)||!h.matches("[0-9A-F]+")||h.length()!=prefix.length()+2*n)return null;
+  int[] out=new int[n];for(int i=0;i<n;i++)out[i]=Integer.parseInt(h.substring(prefix.length()+2*i,prefix.length()+2*i+2),16);return out;
+ }
+ double value(String cmd,String raw){
+  int n=Arrays.asList("010C","0110","0114","0115","0118","0119","0103").contains(cmd)?2:1;
+  int[] a=pidBytes(raw,"41"+cmd.substring(2),n);if(a==null)return Double.NaN;
+  switch(cmd){
+   case "0105":return a[0]-40;
+   case "010C":return (256*a[0]+a[1])/4.0;
+   case "0106":case "0107":case "0108":case "0109":return (a[0]-128)*100.0/128;
+   case "010E":return a[0]/2.0-64;
+   case "0110":return (256*a[0]+a[1])/100.0;
+   case "0114":case "0115":case "0118":case "0119":return a[0]/200.0;
+   default:return a[0];
+  }
+ }
+ Map<String,String> parseCapture(String text){
+  Map<String,String> m=new LinkedHashMap<>();
+  if(text!=null)for(String l:text.split("\\n")){int k=l.indexOf(" = ");if(k==4)m.put(l.substring(0,k),l.substring(k+3).trim());}return m;
+ }
+ boolean comparable(Map<String,String> m){
+  double t=value("0105",m.get("0105")),r=value("010C",m.get("010C")),v=value("010D",m.get("010D")),loop=value("0103",m.get("0103"));
+  return t>=80&&t<=110&&r>=500&&r<=1000&&v==0&&loop==2;
+ }
  void captureKam(String phase){
   submit(()->{try{
+   if(!connectedForMaintenance())throw new IOException("Connecter le PCM CAN avant la capture.");
    show("=== KAM : mesure "+phase+" (lecture seule) ===");
    StringBuilder data=new StringBuilder(new Date().toString()+"\n");
    for(String c:new String[]{"0101","03","07","0103","0105","010C","010D","0106","0107","0108","0109","010E","0110","0114","0115","0118","0119"}){
     String raw=query(c);data.append(c).append(" = ").append(raw.replace('\r',' ').replace('\n',' ')).append('\n');
    }
-   getSharedPreferences("kam_test",MODE_PRIVATE).edit().putString(phase,data.toString()).apply();
-   show("Mesure "+phase+" sauvegardée localement. Aucun reset envoyé.");
-  }catch(Exception e){show("Capture incomplète, non enregistrée : "+e);}});
+   Map<String,String> m=parseCapture(data.toString());
+   for(String c:new String[]{"0105","010C","010D","0103","0107","0109"})if(!Double.isFinite(value(c,m.get(c))))throw new IOException("Donnée essentielle manquante : "+c);
+   android.content.SharedPreferences prefs=getSharedPreferences("kam_test",MODE_PRIVATE);
+   boolean good=comparable(m);
+   android.content.SharedPreferences.Editor ed=prefs.edit().putString(phase+"_latest",data.toString());
+   if(good||!comparable(parseCapture(prefs.getString(phase,""))))ed.putString(phase,data.toString());
+   if(!ed.commit())throw new IOException("Sauvegarde locale impossible.");
+   show(good?"Mesure comparable sauvegardée (moteur chaud, ralenti, boucle fermée).":"Mesure sauvegardée comme relevé non comparable. Une référence valide antérieure est conservée.");
+   show("Aucun reset envoyé.");
+  }catch(Exception e){show("Capture incomplète : "+e);}});
  }
  void compareKam(){
   android.content.SharedPreferences p=getSharedPreferences("kam_test",MODE_PRIVATE);
-  StringBuilder report=new StringBuilder("=== COMPARAISON KAM (mesures enregistrées) ===\n");
-  for(String phase:new String[]{"avant","apres","retour"})report.append("\n").append(phase.toUpperCase(Locale.ROOT)).append("\n").append(p.getString(phase,"Non enregistré")).append("\n");
+  String[] phases={"avant","apres","retour"};
+  List<Map<String,String>> samples=new ArrayList<>();
+  StringBuilder report=new StringBuilder("=== COMPARAISON KAM — mesures réelles ===\n");
+  for(String phase:phases){String raw=p.getString(phase,"");Map<String,String> m=parseCapture(raw);samples.add(m);report.append(phase.toUpperCase(Locale.ROOT)).append(" : ").append(raw.isEmpty()?"absente":raw.split("\\n",2)[0]).append(" | ").append(comparable(m)?"conditions comparables":"conditions non validées").append('\n');}
+  String[] cmds={"0105","010C","0103","0106","0107","0108","0109","010E","0110","0119"};
+  String[] names={"Temp. °C","Régime tr/min","État boucle","STFT B1 %","LTFT B1 %","STFT B2 %","LTFT B2 %","Avance °","MAF g/s","B2S2 V"};
+  report.append("\nAvant | Après | Retour\n");
+  for(int i=0;i<cmds.length;i++){
+   report.append(names[i]).append(" : ");
+   for(int j=0;j<3;j++){if(j>0)report.append(" | ");double d=value(cmds[i],samples.get(j).get(cmds[i]));report.append(Double.isFinite(d)?fmt(d):"—");}
+   report.append('\n');
+  }
+  Map<String,String> a=samples.get(0),b=samples.get(1);
+  if(comparable(a)&&comparable(b)&&Math.abs(value("0105",a.get("0105"))-value("0105",b.get("0105")))<=10&&Math.abs(value("010C",a.get("010C"))-value("010C",b.get("010C")))<=150){
+   for(String cmd:new String[]{"0107","0109"}){double x=value(cmd,a.get(cmd)),y=value(cmd,b.get(cmd));if(Double.isFinite(x)&&Double.isFinite(y))report.append(cmd.equals("0107")?"Variation LTFT B1 : ":"Variation LTFT B2 : ").append(fmt(y-x)).append(" points\n");}
+  }else report.append("Comparer à température et régime similaires avant de conclure.\n");
+  report.append("Une baisse des LTFT ne démontre pas à elle seule un Reset KAM complet.\n");
   show(report.toString());
  }
-
+ void parserSelfTest(){
+  boolean ok=Math.abs(value("0107","41 07 8F")-11.71875)<0.001&&Math.abs(value("0109","41 09 8C")-9.375)<0.001&&value("010C","41 0C 0B 41")==720.25&&value("0105","41 05 7E")==86&&Double.isNaN(value("0107","NO DATA"));
+  show("Autotest local du décodeur KAM : "+(ok?"RÉUSSI":"ÉCHEC")+" — données fictives, aucun message envoyé au véhicule.");
+ }
  String fmt(double n){return String.format(Locale.CANADA_FRENCH,"%.2f",n);}
  void decode(String cmd,String raw){
   try{

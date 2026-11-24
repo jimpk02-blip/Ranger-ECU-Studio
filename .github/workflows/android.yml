@@ -19,7 +19,7 @@ jobs:
         id: apk
         uses: actions/upload-artifact@v4
         with:
-          name: Ranger-ECU-Studio-v1.2.0-APK
+          name: Ranger-ECU-Studio-v1.2.1-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
@@ -29,4 +29,4 @@ jobs:
           ARTIFACT_URL: ${{ steps.apk.outputs.artifact-url }}
         run: |
           test -n "$ARTIFACT_ID"
-          echo "[Download Ranger ECU Studio v1.2.0]($ARTIFACT_URL)" >> "$GITHUB_STEP_SUMMARY"
+          echo "[Download Ranger ECU Studio v1.2.1]($ARTIFACT_URL)" >> "$GITHUB_STEP_SUMMARY"
