@@ -4,7 +4,7 @@ public class MainActivity extends Activity {
  TextView log; LinearLayout layout; volatile BluetoothSocket socket; final ExecutorService worker=Executors.newSingleThreadExecutor();
  void show(String s){runOnUiThread(()->log.append(s+"\n"));}
  void button(String title,Runnable r){Button b=new Button(this);b.setText(title);layout.addView(b);b.setOnClickListener(v->r.run());}
- public void onCreate(Bundle b){super.onCreate(b); ScrollView scroll=new ScrollView(this);layout=new LinearLayout(this);layout.setOrientation(1);layout.setPadding(24,48,24,24);scroll.addView(layout);setContentView(scroll);
+ public void onCreate(Bundle b){super.onCreate(b); ScrollView scroll=new ScrollView(this);layout=new LinearLayout(this);layout.setOrientation(1);layout.setPadding(24,48,24,24);scroll.addView(layout); LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));TextView footer=new TextView(this);footer.setText("Ranger ECU Studio — v1.1.1");footer.setGravity(android.view.Gravity.CENTER);footer.setPadding(12,16,12,16);footer.setTextSize(13);root.addView(footer,new LinearLayout.LayoutParams(-1,-2));setContentView(root);
  TextView title=new TextView(this);title.setText("RANGER ECU STUDIO — Diagnostic avancé");title.setTextSize(24);layout.addView(title);
  button("Connecter un adaptateur Bluetooth jumelé",()->choose());
  button("Identifier le PCM",()->send("0902","0904","0906","ATDP"));
