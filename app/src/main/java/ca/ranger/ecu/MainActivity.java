@@ -1,7 +1,7 @@
 package ca.ranger.ecu;
 import android.app.*; import android.os.*; import android.bluetooth.*; import android.widget.*; import java.util.*; import java.io.*; import java.util.concurrent.*;
 public class MainActivity extends Activity {
- TextView log; ScrollView journal; LinearLayout layout, commandRow; int commandCount=0; volatile boolean live=false, can=false; final java.util.concurrent.atomic.AtomicBoolean busy=new java.util.concurrent.atomic.AtomicBoolean(); TextView status; boolean advancedPermission=false; final int BLUE=0xff50b9ff, FG=0xffe7eef7; volatile BluetoothSocket socket; final ExecutorService worker=Executors.newSingleThreadExecutor();
+ TextView log; ScrollView journal; LinearLayout layout, commandRow; int commandCount=0; volatile boolean live=false, can=false, pcmReady=false; final java.util.concurrent.atomic.AtomicBoolean busy=new java.util.concurrent.atomic.AtomicBoolean(); TextView status; boolean advancedPermission=false; final int BLUE=0xff50b9ff, FG=0xffe7eef7; volatile BluetoothSocket socket; final ExecutorService worker=Executors.newSingleThreadExecutor();
  void show(String s){runOnUiThread(()->{boolean atBottom=journal.getScrollY()+journal.getHeight()>=log.getBottom()-dp(24);log.append(new java.text.SimpleDateFormat("HH:mm:ss",Locale.CANADA_FRENCH).format(new Date())+"  "+s+"\n");if(atBottom)journal.post(()->journal.fullScroll(android.view.View.FOCUS_DOWN));});}
  android.graphics.drawable.GradientDrawable panel(int color,int stroke){android.graphics.drawable.GradientDrawable d=new android.graphics.drawable.GradientDrawable();d.setColor(color);d.setCornerRadius(dp(9));d.setStroke(dp(1),stroke);return d;}
  int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density); }
@@ -14,10 +14,10 @@ public class MainActivity extends Activity {
  button("Lire les capteurs",()->send("0101","0103","010C","010D","0105","0104","010F","0142","0106","0107","0108","0109","010E","0110","0111","0113","0114","0115","0118","0119"));
  button("Puissance / O2",()->send("0100","0120","0140","0101","03","07","020200","0103","0104","0105","0106","0107","0108","0109","010B","010C","010E","0110","0111","0113","0114","0115","0116","0117","0118","0119","011A","011B","06"));
  button("TPMS / réseau",()->{show("TPMS : géré par le SJB Ford. Les pressions ne sont pas des PID OBD-II génériques. Identification du réseau moteur uniquement ; accès SJB à confirmer.");send("ATI","ATDP","ATDPN","0900","0904","0906");});
- button("Déconnecter",()->{live=false;try{if(socket!=null)socket.close();}catch(Exception e){}setStatus("Déconnecté");});
+ button("Déconnecter",()->{live=false;pcmReady=false;try{if(socket!=null)socket.close();}catch(Exception e){}setStatus("Déconnecté");});
  button("Partager le rapport",()->{android.content.Intent i=new android.content.Intent(android.content.Intent.ACTION_SEND);i.setType("text/plain");i.putExtra(android.content.Intent.EXTRA_TEXT,log.getText().toString());startActivity(android.content.Intent.createChooser(i,"Exporter"));});
- button("Mesures en direct",()->toggleLive());button("Vider le journal",()->log.setText(""));button("Assistant Reset KAM",()->kamMenu());button("Comparer avant / après",()->compareKam());status=new TextView(this);status.setText("Déconnecté");status.setTextSize(12);status.setTextColor(BLUE);status.setPadding(dp(8),dp(7),dp(8),dp(7));status.setBackground(panel(0xff102437,0xff315b7e));root.addView(status,new LinearLayout.LayoutParams(-1,-2));
- TextView heading=new TextView(this);heading.setText("Journal de connexion et diagnostic");heading.setTextSize(14);heading.setTextColor(BLUE);heading.setPadding(dp(6),dp(10),dp(6),dp(5));root.addView(heading,new LinearLayout.LayoutParams(-1,-2));journal=new ScrollView(this);journal.setFillViewport(true);journal.setBackground(panel(0xff0e1b28,0xff263e54));log=new TextView(this);log.setTextColor(0xffeeeeee);log.setTextSize(12);log.setTypeface(android.graphics.Typeface.MONOSPACE);log.setPadding(dp(8),dp(8),dp(8),dp(8));log.setTextIsSelectable(true);journal.addView(log,new ScrollView.LayoutParams(-1,-2));root.addView(journal,new LinearLayout.LayoutParams(-1,0,1));TextView footer=new TextView(this);String version="1.1.8";try{version=getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception ignored){}footer.setText("Ranger ECU Studio — v"+version);footer.setGravity(android.view.Gravity.CENTER);footer.setPadding(0,dp(8),0,dp(8));footer.setTextSize(12);footer.setTextColor(0xff91a9be);root.addView(footer,new LinearLayout.LayoutParams(-1,-2));show("Connexion directe Ranger CAN 11/500. Jumeler le Viecar dans Android au besoin. Paramètres avancés : roue dentée. Aucune écriture PCM.");}
+ button("Mesures en direct",()->toggleLive());button("Vider le journal",()->log.setText(""));button("Maintenance PCM",()->maintenanceMenu());button("Comparer avant / après",()->compareKam());status=new TextView(this);status.setText("Déconnecté");status.setTextSize(12);status.setTextColor(BLUE);status.setPadding(dp(8),dp(7),dp(8),dp(7));status.setBackground(panel(0xff102437,0xff315b7e));root.addView(status,new LinearLayout.LayoutParams(-1,-2));
+ TextView heading=new TextView(this);heading.setText("Journal de connexion et diagnostic");heading.setTextSize(14);heading.setTextColor(BLUE);heading.setPadding(dp(6),dp(10),dp(6),dp(5));root.addView(heading,new LinearLayout.LayoutParams(-1,-2));journal=new ScrollView(this);journal.setFillViewport(true);journal.setBackground(panel(0xff0e1b28,0xff263e54));log=new TextView(this);log.setTextColor(0xffeeeeee);log.setTextSize(12);log.setTypeface(android.graphics.Typeface.MONOSPACE);log.setPadding(dp(8),dp(8),dp(8),dp(8));log.setTextIsSelectable(true);journal.addView(log,new ScrollView.LayoutParams(-1,-2));root.addView(journal,new LinearLayout.LayoutParams(-1,0,1));TextView footer=new TextView(this);String version="1.2.0";try{version=getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception ignored){}footer.setText("Ranger ECU Studio — v"+version);footer.setGravity(android.view.Gravity.CENTER);footer.setPadding(0,dp(8),0,dp(8));footer.setTextSize(12);footer.setTextColor(0xff91a9be);root.addView(footer,new LinearLayout.LayoutParams(-1,-2));show("Connexion directe Ranger CAN 11/500. Jumeler le Viecar dans Android au besoin. Maintenance : effacement DTC après réparation uniquement. Reset KAM et programmation verrouillés.");}
  public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] results){super.onRequestPermissionsResult(requestCode,permissions,results);if(requestCode==1 && results.length>0 && results[0]==0)chooseDevice(advancedPermission);else if(requestCode==1)show("Autorisation Bluetooth refusée.");}
  void choose(){chooseDevice(false);}
  void advancedMenu(){
@@ -46,13 +46,72 @@ public class MainActivity extends Activity {
   }catch(Exception e){show("Bluetooth : "+e);}
  }
  void chooseProtocol(BluetoothDevice d){String[] labels={"CAN 11 bits / 500 kbit/s (Ranger confirmé)","Automatique (45 s)","Ford J1850 PWM (essai)","ISO 9141-2 (essai)","Adaptateur seulement (sans interrogation PCM)"};String[] protocols={"6","0","1","3",""};new AlertDialog.Builder(this).setTitle("Protocole OBD-II").setItems(labels,(dialog,n)->submit(()->connect(d,protocols[n]))).show();}
- void connect(BluetoothDevice d,String protocol){try{can=protocol.equals("6");setStatus("Connexion en cours…");if(socket!=null)socket.close();socket=d.createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"));socket.connect();show("Bluetooth connecté");setStatus("Bluetooth connecté — PCM non confirmé");for(String c:new String[]{"ATZ","ATE0","ATL0","ATS1","ATRV"})query(c);if(protocol.isEmpty()){show("Adaptateur prêt. Aucun test PCM effectué.");return;}query("ATSP"+protocol);show("Recherche PCM : "+(protocol.equals("0")?"automatique (45 s)":protocol)+" — attendre la réponse.");String answer=query("0100");if(answer.replaceAll("\\s+","").contains("4100")){show("Réponse PCM 41 00 reçue.");setStatus("PCM répond — protocole "+protocol);if(protocol.equals("6")){getSharedPreferences("connection",MODE_PRIVATE).edit().putString("device_address",d.getAddress()).putString("device_name",d.getName()==null?"Adaptateur Bluetooth":d.getName()).apply();show("Adaptateur mémorisé pour les prochaines connexions.");}}else show("Aucune réponse PCM positive confirmée. Essayer un autre protocole.");query("ATDP");String p=query("ATDPN");can=p.trim().matches("(?i)A?[6789]");}catch(Exception e){setStatus("Échec de connexion");show("Connexion : "+e);}}
+ void connect(BluetoothDevice d,String protocol){try{pcmReady=false;can=protocol.equals("6");setStatus("Connexion en cours…");if(socket!=null)socket.close();socket=d.createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"));socket.connect();show("Bluetooth connecté");setStatus("Bluetooth connecté — PCM non confirmé");for(String c:new String[]{"ATZ","ATE0","ATL0","ATS1","ATRV"})query(c);if(protocol.isEmpty()){show("Adaptateur prêt. Aucun test PCM effectué.");return;}query("ATSP"+protocol);show("Recherche PCM : "+(protocol.equals("0")?"automatique (45 s)":protocol)+" — attendre la réponse.");String answer=query("0100");if(answer.replaceAll("\\s+","").contains("4100")){pcmReady=true;show("Réponse PCM 41 00 reçue.");setStatus("PCM répond — protocole "+protocol);if(protocol.equals("6")){getSharedPreferences("connection",MODE_PRIVATE).edit().putString("device_address",d.getAddress()).putString("device_name",d.getName()==null?"Adaptateur Bluetooth":d.getName()).apply();show("Adaptateur mémorisé pour les prochaines connexions.");}}else show("Aucune réponse PCM positive confirmée. Essayer un autre protocole.");query("ATDP");String p=query("ATDPN");can=p.trim().matches("(?i)A?[6789]");}catch(Exception e){pcmReady=false;setStatus("Échec de connexion");show("Connexion : "+e);}}
  void setStatus(String s){runOnUiThread(()->{status.setText(s);status.setTextColor(s.startsWith("PCM répond")?0xff57d9a4:s.contains("Échec")?0xffff8e86:BLUE);});}
  void submit(Runnable task){if(!busy.compareAndSet(false,true)){show("Une lecture est déjà en cours.");return;}worker.submit(()->{try{task.run();}finally{busy.set(false);}});}
  void send(String... cs){submit(()->{try{for(String c:cs)query(c);}catch(Exception e){show("Erreur : "+e);}});}
  void toggleLive(){if(live){live=false;show("Arrêt des mesures demandé.");return;}if(busy.get()){show("Terminer la lecture en cours.");return;}live=true;submit(()->{try{show("Mesures en direct — véhicule stationné. Appuyer à nouveau pour arrêter.");while(live){for(String c:new String[]{"010C","0105","0106","0107","0108","0109","010E","0114","0115","0118","0119"}){if(!live)break;query(c);}if(live)Thread.sleep(2000);}}catch(Exception e){show("Mesures : "+e);}finally{live=false;show("Mesures terminées.");}});}
- String query(String c)throws Exception{BluetoothSocket sck=socket;if(sck==null||!sck.isConnected())throw new IOException("Non connecté");OutputStream out=sck.getOutputStream();InputStream in=sck.getInputStream();out.write((c+"\r").getBytes("US-ASCII"));out.flush();StringBuilder s=new StringBuilder();long end=SystemClock.elapsedRealtime()+(c.equals("0100")?45000:15000);while(SystemClock.elapsedRealtime()<end){if(in.available()>0){int v=in.read();if(v=='>'){String raw=s.toString().trim();show(c+" : "+raw);decode(c,raw);return s.toString();}if(v<0)break;s.append((char)v);}else Thread.sleep(20);}show(c+" : réponse partielle avant délai : "+(s.length()==0?"(aucun octet)":s.toString().trim()));sck.close();setStatus("Déconnecté — délai dépassé");throw new IOException("Délai dépassé : "+c+". Reconnecter et choisir un autre protocole.");}
+ String query(String c)throws Exception{BluetoothSocket sck=socket;if(sck==null||!sck.isConnected())throw new IOException("Non connecté");OutputStream out=sck.getOutputStream();InputStream in=sck.getInputStream();out.write((c+"\r").getBytes("US-ASCII"));out.flush();StringBuilder s=new StringBuilder();long end=SystemClock.elapsedRealtime()+(c.equals("0100")?45000:15000);while(SystemClock.elapsedRealtime()<end){if(in.available()>0){int v=in.read();if(v=='>'){String raw=s.toString().trim();show(c+" : "+raw);decode(c,raw);return s.toString();}if(v<0)break;s.append((char)v);}else Thread.sleep(20);}show(c+" : réponse partielle avant délai : "+(s.length()==0?"(aucun octet)":s.toString().trim()));sck.close();pcmReady=false;setStatus("Déconnecté — délai dépassé");throw new IOException("Délai dépassé : "+c+". Reconnecter et choisir un autre protocole.");}
 
+
+
+ void maintenanceMenu(){
+  new AlertDialog.Builder(this).setTitle("Maintenance PCM").setItems(new String[]{
+   "Effacer les DTC après réparation",
+   "Assistant KAM — mesures avant / après",
+   "Reset KAM électronique — verrouillé",
+   "Identification et sauvegarde OBD-II",
+   "Afficher la dernière sauvegarde",
+   "Configuration Ford As-Built — non disponible",
+   "Reprogrammation PCM — verrouillée"
+  },(d,n)->{
+   if(n==0)confirmClear();
+   else if(n==1)kamMenu();
+   else if(n==2)new AlertDialog.Builder(this).setTitle("Reset KAM Ford").setMessage("La commande spécifique à la calibration n'est pas validée. L'effacement OBD-II ne constitue pas un Reset KAM garanti. Utiliser un outil Ford compatible; l'assistant permet de comparer les mesures.").setPositiveButton("OK",null).show();
+   else if(n==3)submit(()->{try{saveMaintenance("identification",new String[]{"ATI","ATRV","ATDP","ATDPN","0900","0902","0904","0906","0100","0120","0140","0101","03","07","020200","020400","020500","020C00","020D00"});show("Sauvegarde OBD-II terminée. Ce n'est pas une sauvegarde de la cartographie ni de l'As-Built.");}catch(Exception e){show("Sauvegarde incomplète : "+e);}});
+   else if(n==4)show(getSharedPreferences("maintenance",MODE_PRIVATE).getString("latest","Aucune sauvegarde enregistrée."));
+   else new AlertDialog.Builder(this).setTitle("Fonction non disponible").setMessage("Accès aux modules Ford et compatibilité matérielle à vérifier. Aucune commande de programmation n'est envoyée.").setPositiveButton("OK",null).show();
+  }).setNegativeButton("Fermer",null).show();
+ }
+ boolean connectedForMaintenance(){BluetoothSocket x=socket;return pcmReady&&can&&x!=null&&x.isConnected();}
+ void confirmClear(){
+  if(!connectedForMaintenance()){show("Maintenance : connecter d'abord le PCM en CAN.");return;}
+  if(busy.get()){show("Arrêter les mesures en direct et terminer la lecture en cours.");return;}
+  final CheckBox repaired=new CheckBox(this);repaired.setText("Je confirme que les défauts concernés ont été réparés et que le véhicule est stationné, moteur arrêté, contact ON.");
+  LinearLayout form=new LinearLayout(this);form.setOrientation(1);form.setPadding(dp(20),dp(8),dp(20),dp(8));TextView info=new TextView(this);info.setText("Cette opération efface les données diagnostiques OBD-II et remet les moniteurs à non prêts. Elle ne répare pas une panne et ne garantit pas un Reset KAM. Les défauts persistants reviendront.");form.addView(info);form.addView(repaired);
+  AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Effacement DTC après réparation").setView(form).setNegativeButton("Annuler",null).setPositiveButton("Effacer",(d,n)->submit(()->clearDtc())).create();
+  dialog.setOnShowListener(v->{dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);repaired.setOnCheckedChangeListener((box,checked)->dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(checked));});dialog.show();
+ }
+ boolean zeroPid(String raw,String prefix,int bytes){
+  String h=raw.trim().replaceAll("\\s+","").toUpperCase(Locale.ROOT);
+  StringBuilder expected=new StringBuilder(prefix);for(int i=0;i<bytes;i++)expected.append("00");return h.equals(expected.toString());
+ }
+ void requireStopped()throws Exception{
+  if(!connectedForMaintenance())throw new IOException("Connexion CAN au PCM non confirmée.");
+  if(!zeroPid(query("010C"),"410C",2)||!zeroPid(query("010D"),"410D",1))throw new IOException("Régime ou vitesse non nuls, ou réponse incertaine. Opération annulée.");
+ }
+ void saveMaintenance(String label,String[] commands)throws Exception{
+  StringBuilder saved=new StringBuilder(label+" — "+new Date()+"\n");
+  for(String cmd:commands)saved.append(cmd).append(" : ").append(query(cmd)).append('\n');
+  if(!getSharedPreferences("maintenance",MODE_PRIVATE).edit().putString("latest",saved.toString()).commit())throw new IOException("Sauvegarde locale impossible.");
+ }
+ void clearDtc(){
+  boolean attempted=false;
+  try{
+   requireStopped();
+   saveMaintenance("Avant effacement DTC",new String[]{"0101","03","07","020200","020400","020500","020C00","020D00"});
+   requireStopped();
+   show("Sauvegarde locale effectuée. Effacement OBD-II après réparation.");
+   attempted=true;
+   String response=query("04");
+   boolean ack=false;
+   for(String line:response.split("[\\r\\n]+"))if(line.trim().equalsIgnoreCase("44"))ack=true;
+   if(!ack){show("Effacement non confirmé. Ne pas répéter automatiquement. Vérifier les DTC.");return;}
+   show("Réponse positive OBD-II reçue. Vérification des défauts et moniteurs.");
+   query("0101");query("03");query("07");
+   show("Contrôle terminé. Aucun Reset KAM Ford confirmé.");
+  }catch(Exception e){show((attempted?"Résultat de l'effacement incertain; vérifier les DTC : ":"Effacement non envoyé : ")+e);}
+ }
 
  void kamMenu(){
   String[] actions={"1. Enregistrer avant réinitialisation","2. Procédure de réinitialisation externe","3. Enregistrer après réinitialisation","4. Enregistrer au retour du problème"};
@@ -113,7 +172,7 @@ public class MainActivity extends Activity {
     String v=null;
     switch(pid){
      case 1: v="Check Engine : "+((a&128)!=0?"allumé":"éteint")+" ; DTC confirmés : "+(a&127);break;
-     case 3: v="Boucle carburant B1 : "+loop(a)+(b>=0?" ; B2 : "+loop(b):"");break;
+     case 3: v="Système carburant 1 : "+loop(a)+(b>=0?" ; système 2 : "+loop(b):"");break;
      case 4:v="Charge calculée : "+fmt(a*100.0/255)+" %";break;
      case 5:v="Liquide de refroidissement : "+(a-40)+" °C";break;
      case 6:case 7:case 8:case 9:v=new String[]{"STFT B1","LTFT B1","STFT B2","LTFT B2"}[pid-6]+" : "+fmt((a-128)*100.0/128)+" %";break;
