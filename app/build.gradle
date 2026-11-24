@@ -1,2 +1,2 @@
 plugins { id 'com.android.application' version '8.7.3' }
-android { namespace 'ca.ranger.ecu'; compileSdk 35; defaultConfig { applicationId 'ca.ranger.ecu'; minSdk 23; targetSdk 32; versionCode 121; versionName '1.2.1' } }
+android { namespace 'ca.ranger.ecu'; compileSdk 35; defaultConfig { applicationId 'ca.ranger.ecu'; minSdk 23; targetSdk 32; versionCode 122; versionName '1.2.2' } }
