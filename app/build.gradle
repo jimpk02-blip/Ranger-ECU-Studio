@@ -5,9 +5,9 @@ android {
     defaultConfig {
         applicationId 'ca.ranger.ecu'
         minSdk 23
-        targetSdk 32
-        versionCode 125
-        versionName '1.2.5'
+        targetSdk 33
+        versionCode 126
+        versionName '1.2.6'
     }
     signingConfigs {
         release {

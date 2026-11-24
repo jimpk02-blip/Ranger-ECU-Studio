@@ -42,13 +42,13 @@ jobs:
           test -n "$APKSIGNER"
           "$APKSIGNER" verify --verbose --print-certs "$APK" > "$RUNNER_TEMP/ranger-cert.txt"
           grep -Fxi 'Signer #1 certificate SHA-256 digest: dd82dd416185af88de9a185dbd48e51f3b8171ac40ccefc28b4dcadd9937632e' "$RUNNER_TEMP/ranger-cert.txt"
-          cp "$APK" Ranger-ECU-Studio-v1.2.5.apk
+          cp "$APK" Ranger-ECU-Studio-v1.2.6.apk
       - name: Publish downloadable APK
         id: apk
         uses: actions/upload-artifact@v4
         with:
-          name: Ranger-ECU-Studio-v1.2.5-APK
-          path: Ranger-ECU-Studio-v1.2.5.apk
+          name: Ranger-ECU-Studio-v1.2.6-APK
+          path: Ranger-ECU-Studio-v1.2.6.apk
           if-no-files-found: error
           retention-days: 30
       - name: Verify artifact publication
@@ -57,4 +57,4 @@ jobs:
           ARTIFACT_URL: ${{ steps.apk.outputs.artifact-url }}
         run: |
           test -n "$ARTIFACT_ID"
-          echo "[Download Ranger ECU Studio v1.2.5]($ARTIFACT_URL)" >> "$GITHUB_STEP_SUMMARY"
+          echo "[Download Ranger ECU Studio v1.2.6]($ARTIFACT_URL)" >> "$GITHUB_STEP_SUMMARY"
