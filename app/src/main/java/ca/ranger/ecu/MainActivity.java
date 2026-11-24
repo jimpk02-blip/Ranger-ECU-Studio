@@ -1,31 +1,58 @@
 package ca.ranger.ecu;
 import android.app.*; import android.os.*; import android.bluetooth.*; import android.widget.*; import java.util.*; import java.io.*; import java.util.concurrent.*;
 public class MainActivity extends Activity {
- TextView log; ScrollView journal; LinearLayout layout, commandRow; int commandCount=0; volatile boolean live=false, can=false; final java.util.concurrent.atomic.AtomicBoolean busy=new java.util.concurrent.atomic.AtomicBoolean(); TextView status; volatile BluetoothSocket socket; final ExecutorService worker=Executors.newSingleThreadExecutor();
+ TextView log; ScrollView journal; LinearLayout layout, commandRow; int commandCount=0; volatile boolean live=false, can=false; final java.util.concurrent.atomic.AtomicBoolean busy=new java.util.concurrent.atomic.AtomicBoolean(); TextView status; final int BLUE=0xff50b9ff, FG=0xffe7eef7; volatile BluetoothSocket socket; final ExecutorService worker=Executors.newSingleThreadExecutor();
  void show(String s){runOnUiThread(()->{boolean atBottom=journal.getScrollY()+journal.getHeight()>=log.getBottom()-dp(24);log.append(new java.text.SimpleDateFormat("HH:mm:ss",Locale.CANADA_FRENCH).format(new Date())+"  "+s+"\n");if(atBottom)journal.post(()->journal.fullScroll(android.view.View.FOCUS_DOWN));});}
+ android.graphics.drawable.GradientDrawable panel(int color,int stroke){android.graphics.drawable.GradientDrawable d=new android.graphics.drawable.GradientDrawable();d.setColor(color);d.setCornerRadius(dp(9));d.setStroke(dp(1),stroke);return d;}
  int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density); }
- void button(String title,Runnable r){if(commandCount++%2==0){commandRow=new LinearLayout(this);commandRow.setOrientation(0);layout.addView(commandRow,new LinearLayout.LayoutParams(-1,-2));}Button b=new Button(this);b.setText(title);b.setAllCaps(false);b.setTextSize(12);b.setMinHeight(dp(48));b.setMinimumHeight(dp(48));b.setPadding(dp(6),dp(4),dp(6),dp(4));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,-1,1);p.setMargins(dp(2),dp(2),dp(2),dp(2));commandRow.addView(b,p);b.setOnClickListener(v->r.run());}
- public void onCreate(Bundle b){super.onCreate(b); LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(dp(8),dp(8),dp(8),0);layout=new LinearLayout(this);layout.setOrientation(1);root.addView(layout,new LinearLayout.LayoutParams(-1,-2));setContentView(root);
- TextView title=new TextView(this);title.setText("RANGER ECU STUDIO — Diagnostic avancé");title.setTextSize(20);layout.addView(title);
- button("Connecter un adaptateur Bluetooth jumelé",()->choose());
+ void button(String title,Runnable r){if(commandCount++%2==0){commandRow=new LinearLayout(this);commandRow.setOrientation(0);layout.addView(commandRow,new LinearLayout.LayoutParams(-1,-2));}Button b=new Button(this);b.setText(title);b.setAllCaps(false);b.setTextSize(12);b.setTextColor(FG);b.setBackground(panel(0xff152b40,0xff315b7e));b.setMinHeight(dp(42));b.setMinimumHeight(dp(48));b.setPadding(dp(6),dp(4),dp(6),dp(4));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,-1,1);p.setMargins(dp(2),dp(2),dp(2),dp(2));commandRow.addView(b,p);b.setOnClickListener(v->r.run());}
+ public void onCreate(Bundle b){super.onCreate(b); LinearLayout root=new LinearLayout(this);root.setOrientation(1);root.setPadding(dp(10),dp(8),dp(10),0);root.setBackgroundColor(0xff0b1420);layout=new LinearLayout(this);layout.setOrientation(1);root.addView(layout,new LinearLayout.LayoutParams(-1,-2));setContentView(root);
+ LinearLayout brand=new LinearLayout(this);brand.setGravity(android.view.Gravity.CENTER_VERTICAL);brand.setPadding(0,0,0,dp(8));ImageView logo=new ImageView(this);logo.setImageResource(R.mipmap.ic_launcher);logo.setScaleType(ImageView.ScaleType.FIT_CENTER);brand.addView(logo,new LinearLayout.LayoutParams(dp(58),dp(58)));LinearLayout words=new LinearLayout(this);words.setOrientation(1);words.setPadding(dp(10),0,0,0);TextView title=new TextView(this);title.setText("RANGER ECU STUDIO");title.setTextColor(FG);title.setTextSize(20);title.setTypeface(null,android.graphics.Typeface.BOLD);words.addView(title);TextView sub=new TextView(this);sub.setText("FORD RANGER  •  DIAGNOSTIC CAN");sub.setTextColor(BLUE);sub.setTextSize(10);words.addView(sub);brand.addView(words,new LinearLayout.LayoutParams(0,-2,1));layout.addView(brand);
+ button("Connexion Bluetooth",()->choose());
  button("Identifier le PCM",()->send("0902","0904","0906","ATDP"));
  button("Lire les codes défaut",()->send("03","07","0A"));
  button("Lire les capteurs",()->send("0101","0103","010C","010D","0105","0104","010F","0142","0106","0107","0108","0109","010E","0110","0111","0113","0114","0115","0118","0119"));
- button("Diagnostic perte de puissance / O2",()->send("0100","0120","0140","0101","03","07","020200","0103","0104","0105","0106","0107","0108","0109","010B","010C","010E","0110","0111","0113","0114","0115","0116","0117","0118","0119","011A","011B","06"));
- button("Diagnostic TPMS / réseau",()->{show("TPMS : géré par le SJB Ford. Les pressions ne sont pas des PID OBD-II génériques. Identification du réseau moteur uniquement ; accès SJB à confirmer.");send("ATI","ATDP","ATDPN","0900","0904","0906");});
+ button("Puissance / O2",()->send("0100","0120","0140","0101","03","07","020200","0103","0104","0105","0106","0107","0108","0109","010B","010C","010E","0110","0111","0113","0114","0115","0116","0117","0118","0119","011A","011B","06"));
+ button("TPMS / réseau",()->{show("TPMS : géré par le SJB Ford. Les pressions ne sont pas des PID OBD-II génériques. Identification du réseau moteur uniquement ; accès SJB à confirmer.");send("ATI","ATDP","ATDPN","0900","0904","0906");});
  button("Déconnecter",()->{live=false;try{if(socket!=null)socket.close();}catch(Exception e){}setStatus("Déconnecté");});
  button("Partager le rapport",()->{android.content.Intent i=new android.content.Intent(android.content.Intent.ACTION_SEND);i.setType("text/plain");i.putExtra(android.content.Intent.EXTRA_TEXT,log.getText().toString());startActivity(android.content.Intent.createChooser(i,"Exporter"));});
- button("Mesures en direct",()->toggleLive());button("Effacer le journal (pas le PCM)",()->log.setText(""));status=new TextView(this);status.setText("Déconnecté");status.setTextSize(13);root.addView(status,new LinearLayout.LayoutParams(-1,-2));
- TextView heading=new TextView(this);heading.setText("Journal de connexion et diagnostic");heading.setTextSize(15);heading.setPadding(dp(6),dp(10),dp(6),dp(5));root.addView(heading,new LinearLayout.LayoutParams(-1,-2));journal=new ScrollView(this);journal.setFillViewport(true);journal.setBackgroundColor(0xff202020);log=new TextView(this);log.setTextColor(0xffeeeeee);log.setTextSize(13);log.setPadding(dp(8),dp(8),dp(8),dp(8));log.setTextIsSelectable(true);journal.addView(log,new ScrollView.LayoutParams(-1,-2));root.addView(journal,new LinearLayout.LayoutParams(-1,0,1));TextView footer=new TextView(this);String version="1.1.4";try{version=getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception ignored){}footer.setText("Ranger ECU Studio — v"+version);footer.setGravity(android.view.Gravity.CENTER);footer.setPadding(0,dp(8),0,dp(8));footer.setTextSize(13);root.addView(footer,new LinearLayout.LayoutParams(-1,-2));show("Jumeler le Viecar dans les paramètres Android. Bluetooth Classic uniquement. Valeurs décodées et réponses brutes. Aucune écriture PCM.");}
+ button("Mesures en direct",()->toggleLive());button("Vider le journal",()->log.setText(""));button("Assistant Reset KAM",()->kamMenu());button("Comparer avant / après",()->compareKam());status=new TextView(this);status.setText("Déconnecté");status.setTextSize(12);status.setTextColor(BLUE);status.setPadding(dp(8),dp(7),dp(8),dp(7));status.setBackground(panel(0xff102437,0xff315b7e));root.addView(status,new LinearLayout.LayoutParams(-1,-2));
+ TextView heading=new TextView(this);heading.setText("Journal de connexion et diagnostic");heading.setTextSize(14);heading.setTextColor(BLUE);heading.setPadding(dp(6),dp(10),dp(6),dp(5));root.addView(heading,new LinearLayout.LayoutParams(-1,-2));journal=new ScrollView(this);journal.setFillViewport(true);journal.setBackground(panel(0xff0e1b28,0xff263e54));log=new TextView(this);log.setTextColor(0xffeeeeee);log.setTextSize(12);log.setTypeface(android.graphics.Typeface.MONOSPACE);log.setPadding(dp(8),dp(8),dp(8),dp(8));log.setTextIsSelectable(true);journal.addView(log,new ScrollView.LayoutParams(-1,-2));root.addView(journal,new LinearLayout.LayoutParams(-1,0,1));TextView footer=new TextView(this);String version="1.1.7";try{version=getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception ignored){}footer.setText("Ranger ECU Studio — v"+version);footer.setGravity(android.view.Gravity.CENTER);footer.setPadding(0,dp(8),0,dp(8));footer.setTextSize(12);footer.setTextColor(0xff91a9be);root.addView(footer,new LinearLayout.LayoutParams(-1,-2));show("Jumeler le Viecar dans les paramètres Android. Bluetooth Classic uniquement. Valeurs décodées et réponses brutes. Aucune écriture PCM.");}
  public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] results){super.onRequestPermissionsResult(requestCode,permissions,results);if(requestCode==1 && results.length>0 && results[0]==0)choose();}
  void choose(){if(Build.VERSION.SDK_INT>=31 && checkSelfPermission("android.permission.BLUETOOTH_CONNECT")!=0){requestPermissions(new String[]{"android.permission.BLUETOOTH_CONNECT"},1);return;} try{BluetoothAdapter a=BluetoothAdapter.getDefaultAdapter();if(a==null||!a.isEnabled()){show("Activer Bluetooth.");return;} ArrayList<BluetoothDevice> ds=new ArrayList<>(a.getBondedDevices());String[] names=new String[ds.size()];for(int i=0;i<ds.size();i++)names[i]=ds.get(i).getName()+" "+ds.get(i).getAddress();new AlertDialog.Builder(this).setTitle("Adaptateur jumelé").setItems(names,(d,n)->chooseProtocol(ds.get(n))).show();}catch(Exception e){show(e.toString());}}
  void chooseProtocol(BluetoothDevice d){String[] labels={"CAN 11 bits / 500 kbit/s (Ranger confirmé)","Automatique (45 s)","Ford J1850 PWM (essai)","ISO 9141-2 (essai)","Adaptateur seulement (sans interrogation PCM)"};String[] protocols={"6","0","1","3",""};new AlertDialog.Builder(this).setTitle("Protocole OBD-II").setItems(labels,(dialog,n)->submit(()->connect(d,protocols[n]))).show();}
  void connect(BluetoothDevice d,String protocol){try{can=protocol.equals("6");setStatus("Connexion en cours…");if(socket!=null)socket.close();socket=d.createRfcommSocketToServiceRecord(UUID.fromString("00001101-0000-1000-8000-00805F9B34FB"));socket.connect();show("Bluetooth connecté");setStatus("Bluetooth connecté — PCM non confirmé");for(String c:new String[]{"ATZ","ATE0","ATL0","ATS1","ATRV"})query(c);if(protocol.isEmpty()){show("Adaptateur prêt. Aucun test PCM effectué.");return;}query("ATSP"+protocol);show("Recherche PCM : "+(protocol.equals("0")?"automatique (45 s)":protocol)+" — attendre la réponse.");String answer=query("0100");if(answer.replaceAll("\\s+","").contains("4100")){show("Réponse PCM 41 00 reçue.");setStatus("PCM répond — protocole "+protocol);}else show("Aucune réponse PCM positive confirmée. Essayer un autre protocole.");query("ATDP");String p=query("ATDPN");can=p.trim().matches("(?i)A?[6789]");}catch(Exception e){setStatus("Échec de connexion");show("Connexion : "+e);}}
- void setStatus(String s){runOnUiThread(()->status.setText(s));}
+ void setStatus(String s){runOnUiThread(()->{status.setText(s);status.setTextColor(s.startsWith("PCM répond")?0xff57d9a4:s.contains("Échec")?0xffff8e86:BLUE);});}
  void submit(Runnable task){if(!busy.compareAndSet(false,true)){show("Une lecture est déjà en cours.");return;}worker.submit(()->{try{task.run();}finally{busy.set(false);}});}
  void send(String... cs){submit(()->{try{for(String c:cs)query(c);}catch(Exception e){show("Erreur : "+e);}});}
  void toggleLive(){if(live){live=false;show("Arrêt des mesures demandé.");return;}if(busy.get()){show("Terminer la lecture en cours.");return;}live=true;submit(()->{try{show("Mesures en direct — véhicule stationné. Appuyer à nouveau pour arrêter.");while(live){for(String c:new String[]{"010C","0105","0106","0107","0108","0109","010E","0114","0115","0118","0119"}){if(!live)break;query(c);}if(live)Thread.sleep(2000);}}catch(Exception e){show("Mesures : "+e);}finally{live=false;show("Mesures terminées.");}});}
  String query(String c)throws Exception{BluetoothSocket sck=socket;if(sck==null||!sck.isConnected())throw new IOException("Non connecté");OutputStream out=sck.getOutputStream();InputStream in=sck.getInputStream();out.write((c+"\r").getBytes("US-ASCII"));out.flush();StringBuilder s=new StringBuilder();long end=SystemClock.elapsedRealtime()+(c.equals("0100")?45000:15000);while(SystemClock.elapsedRealtime()<end){if(in.available()>0){int v=in.read();if(v=='>'){String raw=s.toString().trim();show(c+" : "+raw);decode(c,raw);return s.toString();}if(v<0)break;s.append((char)v);}else Thread.sleep(20);}show(c+" : réponse partielle avant délai : "+(s.length()==0?"(aucun octet)":s.toString().trim()));sck.close();setStatus("Déconnecté — délai dépassé");throw new IOException("Délai dépassé : "+c+". Reconnecter et choisir un autre protocole.");}
+
+
+ void kamMenu(){
+  String[] actions={"1. Enregistrer avant réinitialisation","2. Procédure de réinitialisation externe","3. Enregistrer après réinitialisation","4. Enregistrer au retour du problème"};
+  new AlertDialog.Builder(this).setTitle("Assistant KAM — lecture seule").setItems(actions,(d,n)->{
+   if(n==1){new AlertDialog.Builder(this).setTitle("Reset KAM non disponible dans cette version").setMessage("Aucune commande Ford validée pour cette calibration. Utiliser un outil de diagnostic Ford compatible ou la procédure de déconnexion de la borne négative documentée par Ford, moteur arrêté et clé retirée. Ne jamais relier les bornes de la batterie. La réinitialisation peut affecter le ralenti et les moniteurs OBD. Après l'opération, reconnecter l'adaptateur et comparer à température et régime similaires.").setPositiveButton("Compris",null).show();return;}
+   captureKam(n==0?"avant":n==2?"apres":"retour");
+  }).setNegativeButton("Fermer",null).show();
+ }
+ void captureKam(String phase){
+  submit(()->{try{
+   show("=== KAM : mesure "+phase+" (lecture seule) ===");
+   StringBuilder data=new StringBuilder(new Date().toString()+"\n");
+   for(String c:new String[]{"0101","03","07","0103","0105","010C","010D","0106","0107","0108","0109","010E","0110","0114","0115","0118","0119"}){
+    String raw=query(c);data.append(c).append(" = ").append(raw.replace('\r',' ').replace('\n',' ')).append('\n');
+   }
+   getSharedPreferences("kam_test",MODE_PRIVATE).edit().putString(phase,data.toString()).apply();
+   show("Mesure "+phase+" sauvegardée localement. Aucun reset envoyé.");
+  }catch(Exception e){show("Capture incomplète, non enregistrée : "+e);}});
+ }
+ void compareKam(){
+  android.content.SharedPreferences p=getSharedPreferences("kam_test",MODE_PRIVATE);
+  StringBuilder report=new StringBuilder("=== COMPARAISON KAM (mesures enregistrées) ===\n");
+  for(String phase:new String[]{"avant","apres","retour"})report.append("\n").append(phase.toUpperCase(Locale.ROOT)).append("\n").append(p.getString(phase,"Non enregistré")).append("\n");
+  show(report.toString());
+ }
 
  String fmt(double n){return String.format(Locale.CANADA_FRENCH,"%.2f",n);}
  void decode(String cmd,String raw){
@@ -35,6 +62,13 @@ public class MainActivity extends Activity {
     if(!can){show("Décodage DTC automatique réservé au CAN; voir réponse brute.");return;}
     String sid=cmd.equals("03")?"43":cmd.equals("07")?"47":"4A";
     boolean found=false;
+    StringBuilder joined=new StringBuilder();int next=0;
+    for(String line:upper.split("[\\r\\n]+")){
+     java.util.regex.Matcher m=java.util.regex.Pattern.compile("^\\s*([0-9A-F]+):\\s*([0-9A-F\\s]+)$").matcher(line);
+     if(m.matches()&&Integer.parseInt(m.group(1),16)==next){joined.append(m.group(2).replaceAll("\\s+",""));next++;}
+     else if(next>0)break;
+    }
+    if(next>0)upper=joined.toString();
     for(String line:upper.split("[\\r\\n]+")){
      String h=line.replaceAll("\\s+","");
      if(!h.startsWith(sid)||!h.matches("[0-9A-F]+")||h.length()<4||h.length()%2!=0)continue;
