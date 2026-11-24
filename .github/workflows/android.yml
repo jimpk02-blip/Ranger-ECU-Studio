@@ -13,7 +13,20 @@ jobs:
         with:
           gradle-version: '8.9'
       - run: gradle assembleDebug
-      - uses: actions/upload-artifact@v4
+      - name: Verify APK exists
+        run: test -s app/build/outputs/apk/debug/app-debug.apk && ls -lh app/build/outputs/apk/debug/app-debug.apk
+      - name: Publish downloadable APK
+        id: apk
+        uses: actions/upload-artifact@v4
         with:
           name: Ranger-ECU-Studio-v1.1.5-APK
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+      - name: Verify artifact publication
+        env:
+          ARTIFACT_ID: ${{ steps.apk.outputs.artifact-id }}
+          ARTIFACT_URL: ${{ steps.apk.outputs.artifact-url }}
+        run: |
+          test -n "$ARTIFACT_ID"
+          echo "[Download Ranger ECU Studio v1.1.5]($ARTIFACT_URL)" >> "$GITHUB_STEP_SUMMARY"
