@@ -1,5 +1,7 @@
 name: Android APK
 on: [push, workflow_dispatch]
+permissions:
+  contents: read
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -12,15 +14,41 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - run: gradle assembleDebug
-      - name: Verify APK exists
-        run: test -s app/build/outputs/apk/debug/app-debug.apk && ls -lh app/build/outputs/apk/debug/app-debug.apk
+      - name: Build permanently signed APK
+        env:
+          SIGNING_BUNDLE: ${{ secrets.RANGER_SIGNING_BUNDLE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "$SIGNING_BUNDLE" || "$SIGNING_BUNDLE" != *:* ]]; then
+            echo "::error::Configure repository Actions secret RANGER_SIGNING_BUNDLE before building. No temporary signing key will be generated."
+            exit 1
+          fi
+          umask 077
+          export RANGER_KEYSTORE="$RUNNER_TEMP/ranger-signing.p12"
+          trap 'rm -f "$RANGER_KEYSTORE"' EXIT
+          export RANGER_KEYSTORE_PASSWORD="${SIGNING_BUNDLE%%:*}"
+          echo "::add-mask::$RANGER_KEYSTORE_PASSWORD"
+          printf '%s' "${SIGNING_BUNDLE#*:}" | base64 --decode > "$RANGER_KEYSTORE"
+          unset SIGNING_BUNDLE
+          gradle --no-daemon assembleRelease
+      - name: Verify APK and permanent signing certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK=app/build/outputs/apk/release/app-release.apk
+          test -s "$APK"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+          test -n "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs "$APK" > "$RUNNER_TEMP/ranger-cert.txt"
+          grep -Fxi 'Signer #1 certificate SHA-256 digest: dd82dd416185af88de9a185dbd48e51f3b8171ac40ccefc28b4dcadd9937632e' "$RUNNER_TEMP/ranger-cert.txt"
+          cp "$APK" Ranger-ECU-Studio-v1.2.3.apk
       - name: Publish downloadable APK
         id: apk
         uses: actions/upload-artifact@v4
         with:
-          name: Ranger-ECU-Studio-v1.2.2-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: Ranger-ECU-Studio-v1.2.3-APK
+          path: Ranger-ECU-Studio-v1.2.3.apk
           if-no-files-found: error
           retention-days: 30
       - name: Verify artifact publication
@@ -29,4 +57,4 @@ jobs:
           ARTIFACT_URL: ${{ steps.apk.outputs.artifact-url }}
         run: |
           test -n "$ARTIFACT_ID"
-          echo "[Download Ranger ECU Studio v1.2.2]($ARTIFACT_URL)" >> "$GITHUB_STEP_SUMMARY"
+          echo "[Download Ranger ECU Studio v1.2.3]($ARTIFACT_URL)" >> "$GITHUB_STEP_SUMMARY"

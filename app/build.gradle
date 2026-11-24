@@ -1,2 +1,30 @@
 plugins { id 'com.android.application' version '8.7.3' }
-android { namespace 'ca.ranger.ecu'; compileSdk 35; defaultConfig { applicationId 'ca.ranger.ecu'; minSdk 23; targetSdk 32; versionCode 122; versionName '1.2.2' } }
+android {
+    namespace 'ca.ranger.ecu'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'ca.ranger.ecu'
+        minSdk 23
+        targetSdk 32
+        versionCode 123
+        versionName '1.2.3'
+    }
+    signingConfigs {
+        release {
+            def signingPath = System.getenv('RANGER_KEYSTORE')
+            if (signingPath) {
+                storeFile file(signingPath)
+                storePassword System.getenv('RANGER_KEYSTORE_PASSWORD')
+                keyAlias 'ranger-ecu-studio'
+                keyPassword System.getenv('RANGER_KEYSTORE_PASSWORD')
+                storeType 'PKCS12'
+            }
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+        }
+    }
+}
