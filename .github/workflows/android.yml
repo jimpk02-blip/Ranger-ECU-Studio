@@ -58,19 +58,20 @@ jobs:
           from pathlib import Path
           report = Path(sys.argv[1]).read_text()
           expected = "dd82dd416185af88de9a185dbd48e51f3b8171ac40ccefc28b4dcadd9937632e"
-          matches = re.findall(r"(?im)^\s*Signer\s+#?\s*(\d+)\s+certificate\s+SHA[- ]?256\s+digest\s*:\s*([0-9a-f: ]+)\s*$", report)
-          actual = [(int(n), re.sub(r"[^0-9a-f]", "", h.lower())) for n, h in matches]
-          print("APK signer fingerprints:", actual)
-          if actual != [(1, expected)]:
+          matches = re.findall(r"(?im)^[ \t]*(?:Signer[ \t]+#?[ \t]*\d+[ \t]*:[ \t]*|Signer[ \t]+#?[ \t]*\d+[ \t]+|V\d+(?:\.\d+)?[ \t]+Signer(?:[ \t]+#?\d+)?[ \t]*:[ \t]*)certificate[ \t]+SHA[- ]?256[ \t]+digest[ \t]*:[ \t]*([0-9a-f: ]+)[ \t]*$", report)
+          actual = {re.sub(r"[^0-9a-f]", "", h.lower()) for h in matches}
+          counts = re.findall(r"(?im)^[ \t]*Number of signers:[ \t]*(\d+)[ \t]*$", report)
+          print("APK signer fingerprints:", sorted(actual))
+          if counts != ["1"] or actual != {expected}:
               sys.exit("APK signer certificate does not match the expected permanent key.")
           PY
-          cp "$APK" Ranger-ECU-Studio-v1.2.8.apk
+          cp "$APK" Ranger-ECU-Studio-v1.2.9.apk
       - name: Publish downloadable APK
         id: apk
         uses: actions/upload-artifact@v4
         with:
-          name: Ranger-ECU-Studio-v1.2.8-APK
-          path: Ranger-ECU-Studio-v1.2.8.apk
+          name: Ranger-ECU-Studio-v1.2.9-APK
+          path: Ranger-ECU-Studio-v1.2.9.apk
           if-no-files-found: error
           retention-days: 30
       - name: Verify artifact publication
@@ -79,4 +80,4 @@ jobs:
           ARTIFACT_URL: ${{ steps.apk.outputs.artifact-url }}
         run: |
           test -n "$ARTIFACT_ID"
-          echo "[Download Ranger ECU Studio v1.2.8]($ARTIFACT_URL)" >> "$GITHUB_STEP_SUMMARY"
+          echo "[Download Ranger ECU Studio v1.2.9]($ARTIFACT_URL)" >> "$GITHUB_STEP_SUMMARY"
