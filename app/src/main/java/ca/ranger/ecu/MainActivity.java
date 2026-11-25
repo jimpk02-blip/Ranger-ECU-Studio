@@ -52,10 +52,11 @@ public class MainActivity extends Activity {
  void choose(){chooseDevice(false);}
  void advancedMenu(){
   String saved=getSharedPreferences("connection",MODE_PRIVATE).getString("device_name","Aucun");
-  menu("Paramètres avancés",new String[]{"Adaptateur mémorisé : "+saved+" — changer","Autres protocoles OBD-II","Oublier l’adaptateur mémorisé"},n->{
+  menu("Paramètres avancés",new String[]{"Adaptateur mémorisé : "+saved+" — changer","Autres protocoles OBD-II","Oublier l’adaptateur mémorisé","Studio de simulation — hors véhicule"},n->{
    if(n==0)chooseDeviceList(false);
    if(n==1)chooseDevice(true);
    if(n==2){getSharedPreferences("connection",MODE_PRIVATE).edit().clear().apply();show("Adaptateur mémorisé supprimé.");}
+   if(n==3)new OfflineStudio(this).open();
   });
  }
  void chooseDeviceList(boolean advanced){pickDevice(advanced,true);}
