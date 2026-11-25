@@ -47,7 +47,7 @@ public class MainActivity extends Activity {
  button("Déconnecter",()->{live=false;pcmReady=false;try{if(socket!=null)socket.close();}catch(Exception e){}setStatus("Déconnecté");});
  button("Partager le rapport",()->{android.content.Intent i=new android.content.Intent(android.content.Intent.ACTION_SEND);i.setType("text/plain");i.putExtra(android.content.Intent.EXTRA_TEXT,log.getText().toString());startActivity(android.content.Intent.createChooser(i,"Exporter"));});
  button("Mesures en direct",()->toggleLive());button("Vider le journal",()->log.setText(""));button("Maintenance PCM",()->maintenanceMenu());button("Comparer avant / après",()->compareKam());status=new TextView(this);status.setText("Déconnecté");status.setTextSize(12);status.setTextColor(BLUE);status.setPadding(dp(8),dp(7),dp(8),dp(7));status.setBackground(panel(0xff102437,0xff315b7e));root.addView(status,new LinearLayout.LayoutParams(-1,-2));
- TextView heading=new TextView(this);heading.setText("Journal de connexion et diagnostic");heading.setTextSize(14);heading.setTextColor(BLUE);heading.setPadding(dp(6),dp(10),dp(6),dp(5));root.addView(heading,new LinearLayout.LayoutParams(-1,-2));journal=new ScrollView(this);journal.setFillViewport(true);journal.setBackground(panel(0xff0e1b28,0xff263e54));log=new TextView(this);log.setTextColor(0xffeeeeee);log.setTextSize(12);log.setTypeface(android.graphics.Typeface.MONOSPACE);log.setPadding(dp(8),dp(8),dp(8),dp(8));log.setTextIsSelectable(true);journal.addView(log,new ScrollView.LayoutParams(-1,-2));root.addView(journal,new LinearLayout.LayoutParams(-1,0,1));TextView footer=new TextView(this);String version="1.2.10";try{version=getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception ignored){}footer.setText("Ranger ECU Studio — v"+version+"  •  Mise à jour test");footer.setGravity(android.view.Gravity.CENTER);footer.setPadding(0,dp(8),0,dp(8));footer.setTextSize(12);footer.setTextColor(0xff91a9be);root.addView(footer,new LinearLayout.LayoutParams(-1,-2));show("Connexion directe Ranger CAN 11/500. Jumeler le Viecar dans Android au besoin. Maintenance : effacement DTC après réparation uniquement. Reset KAM et programmation verrouillés.");}
+ TextView heading=new TextView(this);heading.setText("Journal de connexion et diagnostic");heading.setTextSize(14);heading.setTextColor(BLUE);heading.setPadding(dp(6),dp(10),dp(6),dp(5));root.addView(heading,new LinearLayout.LayoutParams(-1,-2));journal=new ScrollView(this);journal.setFillViewport(true);journal.setBackground(panel(0xff0e1b28,0xff263e54));log=new TextView(this);log.setTextColor(0xffeeeeee);log.setTextSize(12);log.setTypeface(android.graphics.Typeface.MONOSPACE);log.setPadding(dp(8),dp(8),dp(8),dp(8));log.setTextIsSelectable(true);journal.addView(log,new ScrollView.LayoutParams(-1,-2));root.addView(journal,new LinearLayout.LayoutParams(-1,0,1));TextView footer=new TextView(this);String version="1.2.11";try{version=getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception ignored){}footer.setText("Ranger ECU Studio — v"+version);footer.setGravity(android.view.Gravity.CENTER);footer.setPadding(0,dp(8),0,dp(8));footer.setTextSize(12);footer.setTextColor(0xff91a9be);root.addView(footer,new LinearLayout.LayoutParams(-1,-2));show("Connexion directe Ranger CAN 11/500. Jumeler le Viecar dans Android au besoin. Maintenance : effacement DTC après réparation uniquement. Reset KAM et programmation verrouillés.");}
  public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] results){super.onRequestPermissionsResult(requestCode,permissions,results);if(requestCode==1 && results.length>0 && results[0]==0)chooseDevice(advancedPermission);else if(requestCode==1)show("Autorisation Bluetooth refusée.");}
  void choose(){chooseDevice(false);}
  void advancedMenu(){
@@ -89,7 +89,7 @@ public class MainActivity extends Activity {
   menu("Maintenance PCM",new String[]{
    "Effacer les DTC après réparation",
    "Assistant KAM — mesures avant / après",
-   "Reset KAM électronique — verrouillé",
+   "Reset KAM Ford — validation technique",
    "Identification et sauvegarde OBD-II",
    "Afficher la dernière sauvegarde",
    "Configuration Ford As-Built — non disponible",
@@ -98,13 +98,72 @@ public class MainActivity extends Activity {
   },n->{
    if(n==0)confirmClear();
    else if(n==1)kamMenu();
-   else if(n==2)messagePanel("Reset KAM Ford","La commande spécifique à la calibration n'est pas validée. L'effacement OBD-II ne constitue pas un Reset KAM garanti. Utiliser un outil Ford compatible; l'assistant permet de comparer les mesures.");
+   else if(n==2)kamServicePanel();
    else if(n==3)submit(()->{try{saveMaintenance("identification",new String[]{"ATI","ATRV","ATDP","ATDPN","0900","0902","0904","0906","0100","0120","0140","0101","03","07","020200","020400","020500","020C00","020D00"});show("Sauvegarde OBD-II terminée. Ce n'est pas une sauvegarde de la cartographie ni de l'As-Built.");}catch(Exception e){show("Sauvegarde incomplète : "+e);}});
    else if(n==4)show(getSharedPreferences("maintenance",MODE_PRIVATE).getString("latest","Aucune sauvegarde enregistrée."));
    else if(n==7)parserSelfTest();
    else messagePanel("Fonction non disponible","Accès aux modules Ford et compatibilité matérielle à vérifier. Aucune commande de programmation n'est envoyée.");
   });
  }
+
+ void kamServicePanel(){
+  LinearLayout body=openPanel("Reset KAM Ford");
+  TextView state=menuText("STATUT  •  COMMANDE NON VALIDÉE",12,0xffffbe72);addMenuRow(body,state);
+  addMenuRow(body,menuText("Contrôle préparatoire du canal PCM CAN 11 bits / 500 kbit/s. Cette opération lit les données du calculateur sans modifier ses adaptations.",14,FG));
+  addMenuRow(body,menuButton("Vérifier le canal PCM — lecture seule",true,()->{closeMenus();submit(()->checkKamChannel());}));
+  addMenuRow(body,menuButton("Mesures avant / après",false,()->kamMenu()));
+  addMenuRow(body,menuText("Le Reset KAM électronique n'est pas encore disponible. L'effacement DTC et le redémarrage du calculateur ne remplacent pas cette opération. Une procédure Ford confirmée est nécessaire.",13,0xff91a9be));
+ }
+ boolean adapterOK(String response){
+  if(response==null)return false;
+  for(String line:response.split("[\\r\\n]+"))if(line.trim().equalsIgnoreCase("OK"))return true;
+  return false;
+ }
+ boolean pcmCanHeader(String raw){
+  if(raw==null)return false;
+  for(String line:raw.split("[\\r\\n]+")){
+   String h=line.replaceAll("\\s+","").toUpperCase(Locale.ROOT);
+   if(h.matches("7E8(?:06)?4100[0-9A-F]{8}(?:[0-9A-F]{2})?"))return true;
+  }return false;
+ }
+ void checkKamChannel(){
+  boolean changed=false,restored=false,confirmed=false;
+  StringBuilder summary=new StringBuilder("=== VALIDATION CAN PCM — lecture seule ===\n");
+  try{
+   if(!connectedForMaintenance())throw new IOException("Connecter le PCM avant le contrôle.");
+   if(!query("ATDPN").trim().matches("(?i)A?6"))throw new IOException("Le protocole CAN 11/500 doit être confirmé.");
+   requireStopped();
+   summary.append("Calibration brute : ").append(query("0904").trim()).append('\n');
+   summary.append("CVN : ").append(query("0906").trim()).append('\n');
+   summary.append("Tension adaptateur : ").append(query("ATRV").trim()).append('\n');
+   changed=true;
+   if(!adapterOK(query("ATSH7E0")))throw new IOException("Adaptateur : adresse physique non acceptée.");
+   if(!adapterOK(query("ATH1")))throw new IOException("Adaptateur : affichage des en-têtes non accepté.");
+   String response=query("0100");
+   summary.append("Requête physique 7E0 / réponse attendue 7E8 : ").append(response.trim()).append('\n');
+   confirmed=pcmCanHeader(response);
+   summary.append(confirmed?"Canal PCM physique confirmé pour la lecture OBD-II.\n":"Réponse physique non confirmée. Ne pas utiliser pour les fonctions de service.\n");
+  }catch(Exception e){summary.append("Contrôle interrompu : ").append(e.getMessage()).append('\n');}
+  finally{
+   if(changed){
+    try{
+     if(!adapterOK(query("ATH0")))throw new IOException("ATH0 non accepté");
+     if(!adapterOK(query("ATSH7DF")))throw new IOException("ATSH7DF non accepté");
+     if(pidBytes(query("0100"),"4100",4)==null)throw new IOException("Lecture standard non confirmée");
+     restored=true;
+    }catch(Exception e){
+     pcmReady=false;live=false;try{if(socket!=null)socket.close();}catch(Exception ignored){}
+     setStatus("Déconnecté — reconnecter le PCM");
+     summary.append("Configuration standard non confirmée : adaptateur déconnecté.\n");
+    }
+   }
+   if(restored)summary.append("Configuration OBD-II standard rétablie.\n");
+   summary.append("Aucune commande de réinitialisation ou programmation envoyée. Compatibilité KAM non démontrée.");
+   String report=summary.toString();
+   getSharedPreferences("kam_test",MODE_PRIVATE).edit().putString("channel_report",report).apply();show(report);
+  }
+ }
+
  boolean connectedForMaintenance(){BluetoothSocket x=socket;return pcmReady&&can&&x!=null&&x.isConnected();}
  void confirmClear(){
   if(!connectedForMaintenance()){show("Maintenance : connecter d'abord le PCM en CAN.");return;}
