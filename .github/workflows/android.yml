@@ -31,24 +31,46 @@ jobs:
           echo "::add-mask::$RANGER_KEYSTORE_PASSWORD"
           printf '%s' "${SIGNING_BUNDLE#*:}" | base64 --decode > "$RANGER_KEYSTORE"
           unset SIGNING_BUNDLE
+          EXPECTED="dd82dd416185af88de9a185dbd48e51f3b8171ac40ccefc28b4dcadd9937632e"
+          ACTUAL="$(keytool -exportcert -alias ranger-ecu-studio -keystore "$RANGER_KEYSTORE" -storetype PKCS12 -storepass:env RANGER_KEYSTORE_PASSWORD | sha256sum | cut -d' ' -f1)"
+          echo "Keystore certificate SHA-256: $ACTUAL"
+          if [[ "$ACTUAL" != "$EXPECTED" ]]; then
+            echo "::error::Repository secret contains a different signing certificate than the original key."
+            exit 1
+          fi
           gradle --no-daemon assembleRelease
       - name: Verify APK and permanent signing certificate
         shell: bash
         run: |
           set -euo pipefail
           APK=app/build/outputs/apk/release/app-release.apk
-          test -s "$APK"
+          if [[ ! -s "$APK" ]]; then
+            find app/build/outputs/apk -type f -print
+            echo "::error::Expected release APK not found."
+            exit 1
+          fi
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
           test -n "$APKSIGNER"
-          "$APKSIGNER" verify --verbose --print-certs "$APK" > "$RUNNER_TEMP/ranger-cert.txt"
-          grep -Fxi 'Signer #1 certificate SHA-256 digest: dd82dd416185af88de9a185dbd48e51f3b8171ac40ccefc28b4dcadd9937632e' "$RUNNER_TEMP/ranger-cert.txt"
-          cp "$APK" Ranger-ECU-Studio-v1.2.7.apk
+          echo "Using $APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee "$RUNNER_TEMP/ranger-cert.txt"
+          python3 - "$RUNNER_TEMP/ranger-cert.txt" <<'PY'
+          import re, sys
+          from pathlib import Path
+          report = Path(sys.argv[1]).read_text()
+          expected = "dd82dd416185af88de9a185dbd48e51f3b8171ac40ccefc28b4dcadd9937632e"
+          matches = re.findall(r"(?im)^\s*Signer\s+#?\s*(\d+)\s+certificate\s+SHA[- ]?256\s+digest\s*:\s*([0-9a-f: ]+)\s*$", report)
+          actual = [(int(n), re.sub(r"[^0-9a-f]", "", h.lower())) for n, h in matches]
+          print("APK signer fingerprints:", actual)
+          if actual != [(1, expected)]:
+              sys.exit("APK signer certificate does not match the expected permanent key.")
+          PY
+          cp "$APK" Ranger-ECU-Studio-v1.2.8.apk
       - name: Publish downloadable APK
         id: apk
         uses: actions/upload-artifact@v4
         with:
-          name: Ranger-ECU-Studio-v1.2.7-APK
-          path: Ranger-ECU-Studio-v1.2.7.apk
+          name: Ranger-ECU-Studio-v1.2.8-APK
+          path: Ranger-ECU-Studio-v1.2.8.apk
           if-no-files-found: error
           retention-days: 30
       - name: Verify artifact publication
@@ -57,4 +79,4 @@ jobs:
           ARTIFACT_URL: ${{ steps.apk.outputs.artifact-url }}
         run: |
           test -n "$ARTIFACT_ID"
-          echo "[Download Ranger ECU Studio v1.2.7]($ARTIFACT_URL)" >> "$GITHUB_STEP_SUMMARY"
+          echo "[Download Ranger ECU Studio v1.2.8]($ARTIFACT_URL)" >> "$GITHUB_STEP_SUMMARY"
