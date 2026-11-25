@@ -95,7 +95,8 @@ public class MainActivity extends Activity {
    "Configuration Ford As-Built — non disponible",
    "Reprogrammation PCM — verrouillée",
    "Autotest local — sans véhicule",
-   "Investigation Ford — laboratoire CAN"
+   "Investigation Ford — laboratoire CAN",
+   "Dossier calibration — fichiers réels"
   },n->{
    if(n==0)confirmClear();
    else if(n==1)kamMenu();
@@ -104,11 +105,16 @@ public class MainActivity extends Activity {
    else if(n==4)show(getSharedPreferences("maintenance",MODE_PRIVATE).getString("latest","Aucune sauvegarde enregistrée."));
    else if(n==7)parserSelfTest();
    else if(n==8)fordLabPanel();
+   else if(n==9)new CalibrationArchive(this).open();
    else messagePanel("Fonction non disponible","Accès aux modules Ford et compatibilité matérielle à vérifier. Aucune commande de programmation n'est envoyée.");
   });
  }
 
 
+ @Override protected void onActivityResult(int requestCode,int resultCode,android.content.Intent data){
+  super.onActivityResult(requestCode,resultCode,data);
+  if(requestCode==CalibrationArchive.REQUEST && resultCode==RESULT_OK && data!=null && data.getData()!=null)new CalibrationArchive(this).inspect(data.getData());
+ }
  void fordLabPanel(){
   LinearLayout body=openPanel("Investigation Ford");
   addMenuRow(body,menuText("LABORATOIRE CAN  /  LECTURE SEULE",12,0xff57d9a4));
