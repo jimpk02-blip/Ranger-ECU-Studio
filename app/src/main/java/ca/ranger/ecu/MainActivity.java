@@ -47,7 +47,7 @@ public class MainActivity extends Activity {
  button("Déconnecter",()->{live=false;pcmReady=false;try{if(socket!=null)socket.close();}catch(Exception e){}setStatus("Déconnecté");});
  button("Partager le rapport",()->{android.content.Intent i=new android.content.Intent(android.content.Intent.ACTION_SEND);i.setType("text/plain");i.putExtra(android.content.Intent.EXTRA_TEXT,log.getText().toString());startActivity(android.content.Intent.createChooser(i,"Exporter"));});
  button("Mesures en direct",()->toggleLive());button("Vider le journal",()->log.setText(""));button("Maintenance PCM",()->maintenanceMenu());button("Comparer avant / après",()->compareKam());status=new TextView(this);status.setText("Déconnecté");status.setTextSize(12);status.setTextColor(BLUE);status.setPadding(dp(8),dp(7),dp(8),dp(7));status.setBackground(panel(0xff102437,0xff315b7e));root.addView(status,new LinearLayout.LayoutParams(-1,-2));
- TextView heading=new TextView(this);heading.setText("Journal de connexion et diagnostic");heading.setTextSize(14);heading.setTextColor(BLUE);heading.setPadding(dp(6),dp(10),dp(6),dp(5));root.addView(heading,new LinearLayout.LayoutParams(-1,-2));journal=new ScrollView(this);journal.setFillViewport(true);journal.setBackground(panel(0xff0e1b28,0xff263e54));log=new TextView(this);log.setTextColor(0xffeeeeee);log.setTextSize(12);log.setTypeface(android.graphics.Typeface.MONOSPACE);log.setPadding(dp(8),dp(8),dp(8),dp(8));log.setTextIsSelectable(true);journal.addView(log,new ScrollView.LayoutParams(-1,-2));root.addView(journal,new LinearLayout.LayoutParams(-1,0,1));TextView footer=new TextView(this);String version="1.2.11";try{version=getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception ignored){}footer.setText("Ranger ECU Studio — v"+version);footer.setGravity(android.view.Gravity.CENTER);footer.setPadding(0,dp(8),0,dp(8));footer.setTextSize(12);footer.setTextColor(0xff91a9be);root.addView(footer,new LinearLayout.LayoutParams(-1,-2));show("Connexion directe Ranger CAN 11/500. Jumeler le Viecar dans Android au besoin. Maintenance : effacement DTC après réparation uniquement. Reset KAM et programmation verrouillés.");}
+ TextView heading=new TextView(this);heading.setText("Journal de connexion et diagnostic");heading.setTextSize(14);heading.setTextColor(BLUE);heading.setPadding(dp(6),dp(10),dp(6),dp(5));root.addView(heading,new LinearLayout.LayoutParams(-1,-2));journal=new ScrollView(this);journal.setFillViewport(true);journal.setBackground(panel(0xff0e1b28,0xff263e54));log=new TextView(this);log.setTextColor(0xffeeeeee);log.setTextSize(12);log.setTypeface(android.graphics.Typeface.MONOSPACE);log.setPadding(dp(8),dp(8),dp(8),dp(8));log.setTextIsSelectable(true);journal.addView(log,new ScrollView.LayoutParams(-1,-2));root.addView(journal,new LinearLayout.LayoutParams(-1,0,1));TextView footer=new TextView(this);String version="1.2.12";try{version=getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception ignored){}footer.setText("Ranger ECU Studio — v"+version);footer.setGravity(android.view.Gravity.CENTER);footer.setPadding(0,dp(8),0,dp(8));footer.setTextSize(12);footer.setTextColor(0xff91a9be);root.addView(footer,new LinearLayout.LayoutParams(-1,-2));show("Connexion directe Ranger CAN 11/500. Jumeler le Viecar dans Android au besoin. Maintenance : effacement DTC après réparation uniquement. Reset KAM et programmation verrouillés.");}
  public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] results){super.onRequestPermissionsResult(requestCode,permissions,results);if(requestCode==1 && results.length>0 && results[0]==0)chooseDevice(advancedPermission);else if(requestCode==1)show("Autorisation Bluetooth refusée.");}
  void choose(){chooseDevice(false);}
  void advancedMenu(){
@@ -94,7 +94,8 @@ public class MainActivity extends Activity {
    "Afficher la dernière sauvegarde",
    "Configuration Ford As-Built — non disponible",
    "Reprogrammation PCM — verrouillée",
-   "Autotest local — sans véhicule"
+   "Autotest local — sans véhicule",
+   "Investigation Ford — laboratoire CAN"
   },n->{
    if(n==0)confirmClear();
    else if(n==1)kamMenu();
@@ -102,8 +103,100 @@ public class MainActivity extends Activity {
    else if(n==3)submit(()->{try{saveMaintenance("identification",new String[]{"ATI","ATRV","ATDP","ATDPN","0900","0902","0904","0906","0100","0120","0140","0101","03","07","020200","020400","020500","020C00","020D00"});show("Sauvegarde OBD-II terminée. Ce n'est pas une sauvegarde de la cartographie ni de l'As-Built.");}catch(Exception e){show("Sauvegarde incomplète : "+e);}});
    else if(n==4)show(getSharedPreferences("maintenance",MODE_PRIVATE).getString("latest","Aucune sauvegarde enregistrée."));
    else if(n==7)parserSelfTest();
+   else if(n==8)fordLabPanel();
    else messagePanel("Fonction non disponible","Accès aux modules Ford et compatibilité matérielle à vérifier. Aucune commande de programmation n'est envoyée.");
   });
+ }
+
+
+ void fordLabPanel(){
+  LinearLayout body=openPanel("Investigation Ford");
+  addMenuRow(body,menuText("LABORATOIRE CAN  /  LECTURE SEULE",12,0xff57d9a4));
+  addMenuRow(body,menuText("Véhicule stationné, frein de stationnement serré, moteur arrêté, contact ON. Détection du canal PCM, inventaire OBD-II et essai d'un identifiant Ford documenté. Aucun balayage de commandes arbitraires.",14,FG));
+  addMenuRow(body,menuButton("Lancer le diagnostic Ford",true,()->{closeMenus();submit(()->runFordLab());}));
+  addMenuRow(body,menuButton("Consulter le dernier rapport",false,()->fordLabReport()));
+  addMenuRow(body,menuButton("Exporter le dernier rapport",false,()->shareFordLab()));
+  addMenuRow(body,menuText("Les traces sont les réponses aux requêtes de l'application, pas une capture passive de tout le bus. Le Reset KAM reste non validé.",13,0xff91a9be));
+ }
+ String labStored(){return getSharedPreferences("ford_lab",MODE_PRIVATE).getString("latest","");}
+ void fordLabReport(){
+  LinearLayout body=openPanel("Rapport d'investigation");
+  String report=labStored();TextView t=menuText(report.isEmpty()?"Aucun rapport enregistré.":report,12,FG);
+  t.setTypeface(android.graphics.Typeface.MONOSPACE);t.setTextIsSelectable(true);addMenuRow(body,t);
+  if(!report.isEmpty())addMenuRow(body,menuButton("Exporter le rapport",true,()->shareFordLab()));
+ }
+ void shareFordLab(){
+  String report=labStored();if(report.isEmpty()){messagePanel("Exportation","Aucun rapport enregistré.");return;}
+  android.content.Intent i=new android.content.Intent(android.content.Intent.ACTION_SEND);
+  i.setType("text/plain");i.putExtra(android.content.Intent.EXTRA_SUBJECT,"Ranger ECU Studio — investigation Ford");i.putExtra(android.content.Intent.EXTRA_TEXT,report);
+  startActivity(android.content.Intent.createChooser(i,"Exporter le rapport Ford"));
+ }
+ String labRead(StringBuilder report,String command)throws Exception{
+  long start=SystemClock.elapsedRealtime();report.append("TX ").append(command).append('\n');
+  try{String raw=query(command);report.append("RX ").append(raw.trim().replace("\r","\n")).append("\nDurée : ").append(SystemClock.elapsedRealtime()-start).append(" ms\n\n");return raw;}
+  catch(Exception e){report.append("ERREUR : ").append(e.getMessage()).append('\n');throw e;}
+ }
+ // Accept ELM header + PCI, optionally a displayed DLC. No arbitrary service probes.
+ String labSingleFrame(String raw){
+  if(raw==null)return "";
+  for(String line:raw.split("[\\r\\n]+")){
+   String[] t=line.trim().toUpperCase(Locale.ROOT).split("\\s+");
+   if(t.length<3||!t[0].equals("7E8"))continue;
+   for(int off=1;off<=2;off++){
+    if(off>=t.length)continue;
+    if(off==2&&!t[1].matches("0?[0-8]"))continue;
+    if(!t[off].matches("0[1-7]"))continue;
+    int n=Integer.parseInt(t[off],16);
+    if(t.length<off+1+n)continue;
+    StringBuilder out=new StringBuilder();boolean valid=true;
+    for(int k=off+1;k<off+1+n;k++){if(!t[k].matches("[0-9A-F]{2}")){valid=false;break;}out.append(t[k]);}
+    if(valid&&(out.toString().startsWith("4100")||out.toString().startsWith("621E1C")||out.toString().startsWith("7F22")))return out.toString();
+   }
+  }return "";
+ }
+ String supportedPids(String raw,String cmd){
+  int[] bytes=pidBytes(raw,"41"+cmd.substring(2),4);
+  if(bytes==null)return "Réponse non décodée";
+  int base=Integer.parseInt(cmd.substring(2),16);StringBuilder out=new StringBuilder();
+  for(int n=1;n<=32;n++){int bit=n-1;if((bytes[bit/8]&(128>>(bit%8)))!=0){if(out.length()>0)out.append(", ");out.append(String.format(Locale.ROOT,"%02X",base+n));}}
+  return out.length()==0?"Aucun":out.toString();
+ }
+ void runFordLab(){
+  StringBuilder r=new StringBuilder("RANGER ECU STUDIO — INVESTIGATION FORD\n"+new Date()+"\nLecture seule / PCM / CAN 11-500\n\n");
+  boolean changed=false,restored=false,completed=false;
+  try{
+   if(!connectedForMaintenance())throw new IOException("Connecter le PCM avant le diagnostic.");
+   if(!labRead(r,"ATDPN").trim().matches("(?i)A?6"))throw new IOException("Protocole 6 non confirmé.");
+   requireStopped();
+   for(String c:new String[]{"ATI","ATRV","ATDP","0900","0904","0906","0100","0120","0140","0101","03","07"}){
+    String raw=labRead(r,c);
+    if(c.equals("0100")||c.equals("0120")||c.equals("0140"))r.append("PID annoncés : ").append(supportedPids(raw,c)).append("\n\n");
+   }
+   changed=true;
+   if(!adapterOK(labRead(r,"ATSH7E0"))||!adapterOK(labRead(r,"ATH1")))throw new IOException("Adressage ou en-têtes non acceptés.");
+   String base=labSingleFrame(labRead(r,"0100"));
+   if(!base.matches("4100[0-9A-F]{8}"))throw new IOException("Réponse physique 7E8 non confirmée. Essai Ford annulé.");
+   r.append("Canal PCM physique confirmé.\n\n");
+   String data=labSingleFrame(labRead(r,"221E1C"));
+   if(data.startsWith("621E1C")&&data.length()>6)r.append("Mode 22 : réponse positive. Données TFT candidates : ").append(data.substring(6)).append(". Unités et compatibilité véhicule à confirmer.\n");
+   else if(data.matches("7F22[0-9A-F]{2}"))r.append("Mode 22 : réponse négative NRC ").append(data.substring(4)).append(". Pas de nouvelle tentative.\n");
+   else r.append("Mode 22 : aucune réponse exploitable. Compatibilité non confirmée.\n");
+   completed=true;
+  }catch(Exception e){r.append("Investigation interrompue : ").append(e.getMessage()).append('\n');}
+  finally{
+   if(changed){
+    try{
+     if(!adapterOK(labRead(r,"ATH0"))||!adapterOK(labRead(r,"ATSH7DF")))throw new IOException("Configuration standard non acceptée.");
+     if(pidBytes(labRead(r,"0100"),"4100",4)==null)throw new IOException("Lecture standard non confirmée.");
+     restored=true;
+    }catch(Exception e){pcmReady=false;live=false;try{if(socket!=null)socket.close();}catch(Exception ignored){}setStatus("Déconnecté — reconnecter le PCM");r.append("Adaptateur déconnecté : ").append(e.getMessage()).append('\n');}
+   }
+   if(restored)r.append("Configuration OBD-II standard rétablie.\n");
+   r.append(completed?"Investigation terminée.\n":"Investigation partielle.\n");
+   r.append("Aucune commande de réinitialisation, effacement, écriture ou programmation envoyée. Aucun Reset KAM confirmé.\n");
+   String report=r.toString();boolean saved=getSharedPreferences("ford_lab",MODE_PRIVATE).edit().putString("latest",report).commit();
+   show(report);show(saved?"Rapport Ford enregistré.":"Échec de sauvegarde locale; exporter le journal.");
+  }
  }
 
  void kamServicePanel(){
@@ -112,6 +205,7 @@ public class MainActivity extends Activity {
   addMenuRow(body,menuText("Contrôle préparatoire du canal PCM CAN 11 bits / 500 kbit/s. Cette opération lit les données du calculateur sans modifier ses adaptations.",14,FG));
   addMenuRow(body,menuButton("Vérifier le canal PCM — lecture seule",true,()->{closeMenus();submit(()->checkKamChannel());}));
   addMenuRow(body,menuButton("Mesures avant / après",false,()->kamMenu()));
+  addMenuRow(body,menuButton("Investigation Ford — laboratoire CAN",false,()->fordLabPanel()));
   addMenuRow(body,menuText("Le Reset KAM électronique n'est pas encore disponible. L'effacement DTC et le redémarrage du calculateur ne remplacent pas cette opération. Une procédure Ford confirmée est nécessaire.",13,0xff91a9be));
  }
  boolean adapterOK(String response){
