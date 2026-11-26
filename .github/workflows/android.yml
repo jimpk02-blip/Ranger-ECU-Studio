@@ -65,13 +65,13 @@ jobs:
           if counts != ["1"] or actual != {expected}:
               sys.exit("APK signer certificate does not match the expected permanent key.")
           PY
-          cp "$APK" Ranger-ECU-Studio-v1.3.0.apk
+          cp "$APK" Ranger-ECU-Studio-v1.4.0.apk
       - name: Publish downloadable APK
         id: apk
         uses: actions/upload-artifact@v4
         with:
-          name: Ranger-ECU-Studio-v1.3.0-APK
-          path: Ranger-ECU-Studio-v1.3.0.apk
+          name: Ranger-ECU-Studio-v1.4.0-APK
+          path: Ranger-ECU-Studio-v1.4.0.apk
           if-no-files-found: error
           retention-days: 30
       - name: Verify artifact publication
@@ -80,4 +80,4 @@ jobs:
           ARTIFACT_URL: ${{ steps.apk.outputs.artifact-url }}
         run: |
           test -n "$ARTIFACT_ID"
-          echo "[Download Ranger ECU Studio v1.3.0]($ARTIFACT_URL)" >> "$GITHUB_STEP_SUMMARY"
+          echo "[Download Ranger ECU Studio v1.4.0]($ARTIFACT_URL)" >> "$GITHUB_STEP_SUMMARY"

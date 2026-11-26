@@ -47,7 +47,7 @@ public class MainActivity extends Activity {
  button("Déconnecter",()->{live=false;pcmReady=false;try{if(socket!=null)socket.close();}catch(Exception e){}setStatus("Déconnecté");});
  button("Partager le rapport",()->{android.content.Intent i=new android.content.Intent(android.content.Intent.ACTION_SEND);i.setType("text/plain");i.putExtra(android.content.Intent.EXTRA_TEXT,log.getText().toString());startActivity(android.content.Intent.createChooser(i,"Exporter"));});
  button("Mesures en direct",()->toggleLive());button("Vider le journal",()->log.setText(""));button("Maintenance PCM",()->maintenanceMenu());button("Comparer avant / après",()->compareKam());status=new TextView(this);status.setText("Déconnecté");status.setTextSize(12);status.setTextColor(BLUE);status.setPadding(dp(8),dp(7),dp(8),dp(7));status.setBackground(panel(0xff102437,0xff315b7e));root.addView(status,new LinearLayout.LayoutParams(-1,-2));
- TextView heading=new TextView(this);heading.setText("Journal de connexion et diagnostic");heading.setTextSize(14);heading.setTextColor(BLUE);heading.setPadding(dp(6),dp(10),dp(6),dp(5));root.addView(heading,new LinearLayout.LayoutParams(-1,-2));journal=new ScrollView(this);journal.setFillViewport(true);journal.setBackground(panel(0xff0e1b28,0xff263e54));log=new TextView(this);log.setTextColor(0xffeeeeee);log.setTextSize(12);log.setTypeface(android.graphics.Typeface.MONOSPACE);log.setPadding(dp(8),dp(8),dp(8),dp(8));log.setTextIsSelectable(true);journal.addView(log,new ScrollView.LayoutParams(-1,-2));root.addView(journal,new LinearLayout.LayoutParams(-1,0,1));TextView footer=new TextView(this);String version="1.3.0";try{version=getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception ignored){}footer.setText("Ranger ECU Studio — v"+version);footer.setGravity(android.view.Gravity.CENTER);footer.setPadding(0,dp(8),0,dp(8));footer.setTextSize(12);footer.setTextColor(0xff91a9be);root.addView(footer,new LinearLayout.LayoutParams(-1,-2));show("Connexion directe Ranger CAN 11/500. Jumeler le Viecar dans Android au besoin. Maintenance : effacement DTC après réparation uniquement. Reset KAM et programmation verrouillés.");}
+ TextView heading=new TextView(this);heading.setText("Journal de connexion et diagnostic");heading.setTextSize(14);heading.setTextColor(BLUE);heading.setPadding(dp(6),dp(10),dp(6),dp(5));root.addView(heading,new LinearLayout.LayoutParams(-1,-2));journal=new ScrollView(this);journal.setFillViewport(true);journal.setBackground(panel(0xff0e1b28,0xff263e54));log=new TextView(this);log.setTextColor(0xffeeeeee);log.setTextSize(12);log.setTypeface(android.graphics.Typeface.MONOSPACE);log.setPadding(dp(8),dp(8),dp(8),dp(8));log.setTextIsSelectable(true);journal.addView(log,new ScrollView.LayoutParams(-1,-2));root.addView(journal,new LinearLayout.LayoutParams(-1,0,1));TextView footer=new TextView(this);String version="1.4.0";try{version=getPackageManager().getPackageInfo(getPackageName(),0).versionName;}catch(Exception ignored){}footer.setText("Ranger ECU Studio — v"+version);footer.setGravity(android.view.Gravity.CENTER);footer.setPadding(0,dp(8),0,dp(8));footer.setTextSize(12);footer.setTextColor(0xff91a9be);root.addView(footer,new LinearLayout.LayoutParams(-1,-2));show("Connexion directe Ranger CAN 11/500. Jumeler le Viecar dans Android au besoin. Maintenance : effacement DTC après réparation uniquement. Reset KAM et programmation verrouillés.");}
  public void onRequestPermissionsResult(int requestCode,String[] permissions,int[] results){super.onRequestPermissionsResult(requestCode,permissions,results);if(requestCode==1 && results.length>0 && results[0]==0)chooseDevice(advancedPermission);else if(requestCode==1)show("Autorisation Bluetooth refusée.");}
  void choose(){chooseDevice(false);}
  void advancedMenu(){
@@ -95,7 +95,8 @@ public class MainActivity extends Activity {
    "Configuration Ford As-Built — non disponible",
    "Reprogrammation PCM — verrouillée",
    "Autotest local — sans véhicule",
-   "Investigation Ford — laboratoire CAN"
+   "Investigation Ford — laboratoire CAN",
+   "Rapport maintenance Bluetooth — preuve de réception"
   },n->{
    if(n==0)confirmClear();
    else if(n==1)kamMenu();
@@ -104,6 +105,7 @@ public class MainActivity extends Activity {
    else if(n==4)show(getSharedPreferences("maintenance",MODE_PRIVATE).getString("latest","Aucune sauvegarde enregistrée."));
    else if(n==7)parserSelfTest();
    else if(n==8)fordLabPanel();
+   else if(n==9)writeAuditPanel();
    else messagePanel("Fonction non disponible","Accès aux modules Ford et compatibilité matérielle à vérifier. Aucune commande de programmation n'est envoyée.");
   });
  }
@@ -281,21 +283,45 @@ public class MainActivity extends Activity {
   if(!getSharedPreferences("maintenance",MODE_PRIVATE).edit().putString("latest",saved.toString()).commit())throw new IOException("Sauvegarde locale impossible.");
  }
  void clearDtc(){
-  boolean attempted=false;
+  boolean attempted=false,ack=false,verified=false;
+  StringBuilder audit=new StringBuilder("Maintenance OBD-II Bluetooth — ").append(new Date()).append('\n');
+  audit.append("Service 04 après réparation uniquement. Ni programmation ni Reset KAM.\n");
   try{
    requireStopped();
    saveMaintenance("Avant effacement DTC",new String[]{"0101","03","07","020200","020400","020500","020C00","020D00"});
+   audit.append(getSharedPreferences("maintenance",MODE_PRIVATE).getString("latest","")).append('\n');
    requireStopped();
    show("Sauvegarde locale effectuée. Effacement OBD-II après réparation.");
    attempted=true;
+   audit.append("Requête de service 04 tentée.\n");
+   getSharedPreferences("maintenance",MODE_PRIVATE).edit().putString("write_audit",audit.toString()+"Résultat encore inconnu. Ne pas répéter automatiquement.").commit();
+   long t=SystemClock.elapsedRealtime();
    String response=query("04");
-   boolean ack=false;
+   audit.append("Réponse brute : ").append(response).append("\nDélai : ").append(SystemClock.elapsedRealtime()-t).append(" ms\n");
    for(String line:response.split("[\\r\\n]+"))if(line.trim().equalsIgnoreCase("44"))ack=true;
    if(!ack){show("Effacement non confirmé. Ne pas répéter automatiquement. Vérifier les DTC.");return;}
    show("Réponse positive OBD-II reçue. Vérification des défauts et moniteurs.");
-   query("0101");query("03");query("07");
+   audit.append("Après :\n");
+   String a=query("0101");audit.append("0101 : ").append(a).append('\n');
+   String b=query("03");audit.append("03 : ").append(b).append('\n');
+   String c=query("07");audit.append("07 : ").append(c).append('\n');
+   verified=pidBytes(a,"4101",4)!=null && b.trim().matches("(?is).*\\b43\\b.*") && c.trim().matches("(?is).*\\b47\\b.*");
    show("Contrôle terminé. Aucun Reset KAM Ford confirmé.");
-  }catch(Exception e){show((attempted?"Résultat de l'effacement incertain; vérifier les DTC : ":"Effacement non envoyé : ")+e);}
+  }catch(Exception e){audit.append("Interruption : ").append(e).append('\n');show((attempted?"Résultat de l'effacement incertain; vérifier les DTC : ":"Effacement non envoyé : ")+e);}
+  finally{
+   audit.append("Bilan : ").append(!attempted?"Non envoyé":ack?"Réponse 44 reçue; opération acceptée selon OBD-II":"Résultat non confirmé").append('\n');
+   audit.append(verified?"Réponses de suivi reconnues (ne prouve pas l'absence de défauts).":"Suivi incomplet ou non reconnu.").append('\n');
+   audit.append("Aucune conclusion sur la réécriture du firmware.");
+   boolean stored=getSharedPreferences("maintenance",MODE_PRIVATE).edit().putString("write_audit",audit.toString()).commit();
+   show(stored?"Rapport de maintenance enregistré.":"Rapport non enregistré.");
+  }
+ }
+ void writeAuditPanel(){
+  LinearLayout body=openPanel("Rapport maintenance Bluetooth");
+  addMenuRow(body,menuText("Le service OBD-II 04 modifie les informations diagnostiques après réparation. Il ne constitue pas un test de programmation. Aucune commande n’est envoyée par cet écran.",14,FG));
+  String report=getSharedPreferences("maintenance",MODE_PRIVATE).getString("write_audit","Aucune opération de maintenance enregistrée avec cette version.");
+  TextView t=menuText(report,12,FG);t.setTextIsSelectable(true);addMenuRow(body,t);
+  addMenuRow(body,menuButton("Partager le rapport",false,()->{android.content.Intent i=new android.content.Intent(android.content.Intent.ACTION_SEND);i.setType("text/plain");i.putExtra(android.content.Intent.EXTRA_TEXT,report);startActivity(android.content.Intent.createChooser(i,"Rapport de maintenance"));}));
  }
 
  void kamMenu(){
